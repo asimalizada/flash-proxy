@@ -1,8 +1,17 @@
-import { Activity, AlertTriangle, CreditCard, Package } from "lucide-react";
+import Link from "next/link";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowUpRight,
+  CreditCard,
+  Package,
+  Zap,
+} from "lucide-react";
 
 import { ProductUsage } from "@/components/dashboard/product-usage";
 import { SummaryCard } from "@/components/dashboard/summary-card";
 import { UsageChart } from "@/components/dashboard/usage-chart";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { DashboardSummary } from "@/lib/dashboard/summary";
 
@@ -15,6 +24,32 @@ export function OverviewPage({ summary }: OverviewPageProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <section className="relative overflow-hidden rounded-md border bg-card/88 px-5 py-5 shadow-[0_18px_50px_color-mix(in_oklch,var(--foreground)_6%,transparent)]">
+        <div className="absolute inset-y-0 right-0 w-1/2 bg-[linear-gradient(115deg,transparent,color-mix(in_oklch,var(--primary)_9%,transparent))]" />
+        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+              <Zap className="size-3.5 text-primary" />
+              Live reseller overview
+            </div>
+            <h1 className="mt-2 text-2xl font-semibold tracking-normal md:text-3xl">
+              ${summary.balance.balanceFormatted.replace("$", "")} available
+            </h1>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button asChild>
+              <Link href="/buy">
+                Buy proxy
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href="/plans">View plans</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {partialErrorCount ? (
         <div className="flex items-center gap-2 rounded-md border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
           <AlertTriangle className="size-4" />
@@ -28,31 +63,43 @@ export function OverviewPage({ summary }: OverviewPageProps) {
           icon={CreditCard}
           label="Balance"
           value={summary.balance.balanceFormatted}
+          tone="primary"
         />
         <SummaryCard
           detail={`${summary.plans.highUsage} high usage`}
           icon={Package}
           label="Active plans"
           value={summary.plans.active}
+          tone="blue"
         />
         <SummaryCard
           detail={summary.usage.period}
           icon={Activity}
           label="Monthly usage"
           value={summary.usage.totalBytesFormatted}
+          tone="amber"
         />
         <SummaryCard
           detail={summary.realtime.updatedAt ? "Updated recently" : "No live data"}
           icon={Activity}
           label="Active sessions"
           value={summary.realtime.totalActiveSessions}
+          tone="rose"
         />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="bg-card/80">
-          <CardHeader>
-            <CardTitle>Usage</CardTitle>
+        <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)] transition-all duration-300 hover:border-primary/25">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <div>
+              <CardTitle>Usage</CardTitle>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {summary.usage.totalBytesFormatted}
+              </p>
+            </div>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/usage">Details</Link>
+            </Button>
           </CardHeader>
           <CardContent>
             <UsageChart data={summary.usage.dailyBreakdown} />

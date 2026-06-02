@@ -16,7 +16,7 @@ export default async function ProtectedDashboardLayout({
   }
 
   return (
-    <DashboardShell apiKeyFingerprint={session.apiKeyFingerprint}>
+    <DashboardShell>
       {children}
     </DashboardShell>
   );
