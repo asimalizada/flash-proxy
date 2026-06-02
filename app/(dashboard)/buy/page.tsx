@@ -1,5 +1,5 @@
-import { PagePlaceholder } from "@/components/shell/page-placeholder";
+import { PriceCheckForm } from "@/components/purchase/price-check-form";
 
 export default function BuyPage() {
-  return <PagePlaceholder title="Buy proxy" />;
+  return <PriceCheckForm />;
 }
