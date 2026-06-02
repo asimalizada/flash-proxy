@@ -12,7 +12,7 @@ export default async function ProtectedDashboardLayout({
   const session = await getCurrentSession();
 
   if (!session) {
-    redirect("/login?next=/dashboard");
+    redirect("/login");
   }
 
   return (

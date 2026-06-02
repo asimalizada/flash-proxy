@@ -2,8 +2,9 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
-export const SESSION_COOKIE_NAME = "flash_session";
-export const SESSION_TTL_DAYS = 7;
+import { SESSION_COOKIE_NAME, SESSION_TTL_DAYS } from "@/lib/auth/constants";
+
+export { SESSION_COOKIE_NAME, SESSION_TTL_DAYS };
 
 export async function getSessionCookie() {
   const cookieStore = await cookies();
