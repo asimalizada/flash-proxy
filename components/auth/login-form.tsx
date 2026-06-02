@@ -1,18 +1,13 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import styles from "@/components/auth/login.module.css";
 
 type LoginFormProps = {
   redirectTo: string;
@@ -61,41 +56,44 @@ export function LoginForm({ redirectTo }: LoginFormProps) {
   }
 
   return (
-    <Card>
-      <form onSubmit={handleSubmit}>
-        <CardHeader className="pb-4">
-          <div className="space-y-2">
-            <Label htmlFor="apiKey">API key</Label>
-            <Input
-              autoComplete="off"
-              id="apiKey"
-              name="apiKey"
-              placeholder="fp_live_..."
-              spellCheck={false}
-              type="password"
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {error ? (
-            <p className="text-sm font-medium text-destructive">{error}</p>
-          ) : null}
-        </CardContent>
-        <CardFooter>
-          <Button className="w-full" disabled={isSubmitting || !apiKey.trim()}>
-            {isSubmitting ? (
-              <>
-                <Loader2 className="size-4 animate-spin" />
-                Signing in
-              </>
-            ) : (
-              "Continue"
-            )}
-          </Button>
-        </CardFooter>
-      </form>
-    </Card>
+    <form
+      className={`${styles.loginFormReveal} space-y-5`}
+      onSubmit={handleSubmit}
+    >
+      <div className="space-y-2">
+        <Label htmlFor="apiKey">API key</Label>
+        <Input
+          autoComplete="off"
+          className="h-12 bg-background/65 shadow-sm backdrop-blur"
+          id="apiKey"
+          name="apiKey"
+          placeholder="fp_live_..."
+          spellCheck={false}
+          type="password"
+          value={apiKey}
+          onChange={(event) => setApiKey(event.target.value)}
+        />
+      </div>
+
+      <div className="min-h-6">
+        {error ? (
+          <p className="text-sm font-medium text-destructive">{error}</p>
+        ) : null}
+      </div>
+
+      <Button className="h-12 w-full" disabled={isSubmitting || !apiKey.trim()}>
+        {isSubmitting ? (
+          <>
+            <Loader2 className="size-4 animate-spin" />
+            Signing in
+          </>
+        ) : (
+          <>
+            Continue
+            <ArrowRight className="size-4" />
+          </>
+        )}
+      </Button>
+    </form>
   );
 }
