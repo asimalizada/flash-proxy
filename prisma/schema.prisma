@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ResellerSession {
+  id              String    @id @default(cuid())
+  apiKeyHash      String
+  encryptedApiKey String
+  ipAddress       String?
+  userAgent       String?
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  lastSeenAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  auditLogs      AuditLog[]
+  apiRequestLogs ApiRequestLog[]
+
+  @@index([apiKeyHash])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  sessionId    String?
+  apiKeyHash   String?
+  action       String
+  resourceType String?
+  resourceId   String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  session ResellerSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([apiKeyHash])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+}
+
+model ApiRequestLog {
+  id         String   @id @default(cuid())
+  sessionId  String?
+  method     String
+  path       String
+  statusCode Int?
+  durationMs Int
+  success    Boolean
+  errorCode  String?
+  createdAt  DateTime @default(now())
+
+  session ResellerSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([method, path])
+  @@index([success])
+  @@index([errorCode])
+  @@index([createdAt])
+}
