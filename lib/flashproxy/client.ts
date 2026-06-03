@@ -94,32 +94,49 @@ export async function flashProxyRequest<TData, TBody = unknown>({
     headers.set("X-Idempotency-Key", idempotencyKey);
   }
 
-  let response: Response;
+  let response!: Response;
   let payload: unknown;
 
-  try {
-    response = await fetch(buildUrl(path, query), {
-      method,
-      headers,
-      body: requestBody,
-      cache: "no-store",
-      signal,
-    });
+  let attempt = 0;
+  const maxRetries = method === "GET" ? 2 : 0;
 
-    const contentType = response.headers.get("content-type") ?? "";
-    payload = contentType.includes("application/json")
-      ? await response.json()
-      : await response.text();
-  } catch (error) {
-    throw new FlashProxyError({
-      status: 0,
-      code: "NETWORK_ERROR",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Unable to reach FlashProxy API",
-      durationMs: Math.round(performance.now() - startedAt),
-    });
+  while (true) {
+    attempt++;
+    try {
+      response = await fetch(buildUrl(path, query), {
+        method,
+        headers,
+        body: requestBody,
+        cache: "no-store",
+        signal,
+      });
+
+      const contentType = response.headers.get("content-type") ?? "";
+      payload = contentType.includes("application/json")
+        ? await response.json()
+        : await response.text();
+    } catch (error) {
+      if (attempt <= maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+        continue;
+      }
+      throw new FlashProxyError({
+        status: 0,
+        code: "NETWORK_ERROR",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Unable to reach FlashProxy API",
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+    }
+
+    if (!response.ok && attempt <= maxRetries && [502, 503, 504].includes(response.status)) {
+      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+      continue;
+    }
+
+    break;
   }
 
   const durationMs = Math.round(performance.now() - startedAt);

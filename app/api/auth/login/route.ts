@@ -6,6 +6,8 @@ import {
 } from "@/lib/audit/actions";
 import { writeAuditLog } from "@/lib/audit/log";
 import { writeApiRequestLog } from "@/lib/audit/request-log";
+import { getRequestContext } from "@/lib/audit/context";
+import { checkRateLimit } from "@/lib/auth/rate-limit";
 import { createResellerSession } from "@/lib/auth/session";
 import { fingerprintApiKey, hashApiKey } from "@/lib/auth/crypto";
 import { FlashProxyError, isFlashProxyError } from "@/lib/flashproxy/errors";
@@ -83,6 +85,13 @@ async function logBalanceRequestError(input: {
 }
 
 export async function POST(request: Request) {
+  const context = getRequestContext(request);
+  const ip = context.ipAddress || "unknown";
+
+  if (!checkRateLimit(ip)) {
+    return jsonError(429, "RATE_LIMITED", "Too many login attempts. Please try again later.");
+  }
+
   let body: unknown;
 
   try {

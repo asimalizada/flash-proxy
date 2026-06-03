@@ -88,8 +88,12 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const payload = buildExtendPlanPayload(parsed.data);
-    const idempotencyKey =
-      request.headers.get("x-idempotency-key") || crypto.randomUUID();
+    const idempotencyKey = request.headers.get("x-idempotency-key");
+
+    if (!idempotencyKey) {
+      return jsonError(400, "MISSING_IDEMPOTENCY_KEY", "Idempotency key is required");
+    }
+
     const data = await extendPlan(session, {
       idempotencyKey,
       payload,

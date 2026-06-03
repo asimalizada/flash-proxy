@@ -364,6 +364,7 @@ The next useful product steps are:
 5. Add deployment notes for production database, secret rotation, and session hardening.
 6. Expand metrics diagnostics with clearer drill-down for errors and destinations.
 7. Add reseller customer references and lightweight customer grouping before full sub-users.
+8. Implement database log retention rules (e.g. `pg_cron` jobs) to delete `ApiRequestLog` entries older than 30 days to prevent uncontrolled database growth.
 
 ## Documentation
 
