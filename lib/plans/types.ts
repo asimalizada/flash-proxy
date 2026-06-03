@@ -58,6 +58,7 @@ export type PlansPagination = {
 
 export type PlansListData = {
   items?: FlashProxyPlan[];
+  plans?: FlashProxyPlan[];
   pagination?: PlansPagination;
 };
 

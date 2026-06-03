@@ -96,7 +96,7 @@ export function PlansScreen({ createdPlanId }: PlansScreenProps) {
     };
   }, []);
 
-  const items = useMemo(() => data?.items ?? [], [data]);
+  const items = useMemo(() => data?.items ?? data?.plans ?? [], [data]);
   const activeCount = useMemo(
     () => items.filter((item) => item.status === "active").length,
     [items]
