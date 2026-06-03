@@ -68,7 +68,7 @@ export function DashboardSidebar() {
             <ArrowUpRight className="size-4 text-muted-foreground transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
           </div>
           <p className="mt-4 text-sm font-semibold">Buy proxy</p>
-          <p className="mt-1 text-xs text-muted-foreground">Create or extend plans</p>
+          <p className="mt-1 text-xs text-muted-foreground">Create new plans</p>
         </Link>
       </div>
     </aside>
