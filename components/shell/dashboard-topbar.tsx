@@ -1,6 +1,5 @@
 "use client";
 
-import { CircleDot } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -22,16 +21,7 @@ export function DashboardTopbar() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-background/78 px-4 backdrop-blur-xl lg:px-7">
       <div>
-        <p className="text-xs font-medium uppercase text-muted-foreground">
-          FlashProxy Business
-        </p>
-        <div className="mt-1 flex items-center gap-3">
-          <p className="text-sm font-semibold">{title}</p>
-          <span className="hidden items-center gap-1.5 rounded-md border bg-secondary/70 px-2 py-1 text-xs font-medium text-muted-foreground sm:flex">
-            <CircleDot className="size-3 fill-primary text-primary" />
-            Live session
-          </span>
-        </div>
+        <p className="text-lg font-semibold tracking-normal">{title}</p>
       </div>
 
       <div className="flex items-center gap-1">
