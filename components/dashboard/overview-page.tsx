@@ -137,7 +137,7 @@ export function OverviewPage({ summary }: OverviewPageProps) {
               </p>
             </div>
             <Button asChild size="sm" variant="outline">
-              <Link href="/usage">Details</Link>
+              <Link href="/plans">Details</Link>
             </Button>
           </CardHeader>
           <CardContent>

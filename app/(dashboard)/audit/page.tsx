@@ -1,4 +1,5 @@
 import { AuditExplorer } from "@/components/audit/audit-explorer";
+import { requireSession } from "@/lib/auth/session";
 import { getAuditOverview } from "@/lib/audit/query";
 import { AUDIT_ACTIONS, AUDIT_RESOURCE_TYPES } from "@/lib/audit/actions";
 
@@ -15,8 +16,10 @@ const VALID_ACTIONS = new Set(Object.values(AUDIT_ACTIONS));
 const VALID_RESOURCE_TYPES = new Set(Object.values(AUDIT_RESOURCE_TYPES));
 
 export default async function AuditPage({ searchParams }: AuditPageProps) {
+  const session = await requireSession();
   const params = await searchParams;
   const filters = {
+    apiKeyHash: session.apiKeyHash,
     action: normalizeActionFilter(params?.action),
     page: parsePositiveInteger(params?.page),
     q: params?.q || undefined,

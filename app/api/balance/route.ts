@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 
-import { requireSession } from "@/lib/auth/session";
+import { requireSession, SessionError } from "@/lib/auth/session";
 import { BalanceError, getBalance } from "@/lib/balance/service";
 
 export async function GET() {
-  const session = await requireSession();
-
   try {
+    const session = await requireSession();
     const data = await getBalance(session);
 
     return NextResponse.json({
@@ -14,7 +13,7 @@ export async function GET() {
       data,
     });
   } catch (error) {
-    if (error instanceof BalanceError) {
+    if (error instanceof SessionError || error instanceof BalanceError) {
       return NextResponse.json(
         {
           success: false,

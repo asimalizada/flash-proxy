@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, CircleAlert, HardDrive, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,7 @@ export function ExtendPlanDialog({
   const normalizedProduct = normalizePlanProduct(plan.product) ?? "";
   const [addBandwidthGb, setAddBandwidthGb] = useState("5");
   const [addDays, setAddDays] = useState("30");
+  const idempotencyKeyRef = useRef("");
   const [quote, setQuote] = useState<Quote>({
     status: "loading",
     message: "Loading extension price",
@@ -90,9 +91,13 @@ export function ExtendPlanDialog({
 
   useEffect(() => {
     if (!isOpen || mode === "unsupported") {
+      idempotencyKeyRef.current = "";
       return;
     }
 
+    if (!idempotencyKeyRef.current) {
+      idempotencyKeyRef.current = crypto.randomUUID();
+    }
     let cancelled = false;
 
     async function loadQuote() {
@@ -264,7 +269,7 @@ export function ExtendPlanDialog({
           <Button
             disabled={!canConfirm}
             onClick={() => {
-              onConfirm(payload, crypto.randomUUID());
+              onConfirm(payload, idempotencyKeyRef.current);
             }}
             type="button"
           >

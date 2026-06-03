@@ -3,6 +3,7 @@ import { AUDIT_ACTIONS, AUDIT_RESOURCE_TYPES } from "@/lib/audit/actions";
 
 type AuditFilters = {
   action?: string;
+  apiKeyHash?: string;
   q?: string;
   resourceType?: string;
 };
@@ -86,6 +87,7 @@ function buildAuditWhere(filters: AuditFilters) {
   const q = filters.q?.trim();
 
   return {
+    ...(filters.apiKeyHash ? { apiKeyHash: filters.apiKeyHash } : {}),
     ...(filters.action ? { action: filters.action } : {}),
     ...(filters.resourceType ? { resourceType: filters.resourceType } : {}),
     ...(q
@@ -93,12 +95,6 @@ function buildAuditWhere(filters: AuditFilters) {
           OR: [
             {
               resourceId: {
-                contains: q,
-                mode: "insensitive" as const,
-              },
-            },
-            {
-              apiKeyHash: {
                 contains: q,
                 mode: "insensitive" as const,
               },
