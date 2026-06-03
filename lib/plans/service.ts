@@ -455,35 +455,41 @@ export async function getPlanMetrics(
 
     const [throughput, latency, errors, statusCodes, destinations, hourlyUsage] =
       await Promise.all([
-        callPlanMetric<PlanMetricsThroughput>(
+        callOptionalPlanMetric<PlanMetricsThroughput>(
           session,
           `/plans/${planId}/metrics/throughput`,
-          query
+          query,
+          { hours: input.hours, series: [] }
         ),
-        callPlanMetric<PlanMetricsLatency>(
+        callOptionalPlanMetric<PlanMetricsLatency>(
           session,
           `/plans/${planId}/metrics/latency`,
-          query
+          query,
+          { hours: input.hours, series: [] }
         ),
-        callPlanMetric<PlanMetricsErrors>(
+        callOptionalPlanMetric<PlanMetricsErrors>(
           session,
           `/plans/${planId}/metrics/errors`,
-          query
+          query,
+          { hours: input.hours, series: [] }
         ),
-        callPlanMetric<PlanMetricsStatusCodes>(
+        callOptionalPlanMetric<PlanMetricsStatusCodes>(
           session,
           `/plans/${planId}/metrics/status-codes`,
-          query
+          query,
+          { hours: input.hours, series: [] }
         ),
-        callPlanMetric<PlanMetricsDestinations>(
+        callOptionalPlanMetric<PlanMetricsDestinations>(
           session,
           `/plans/${planId}/metrics/destinations`,
-          { ...query, limit: 10 }
+          { ...query, limit: 10 },
+          { hours: input.hours, destinations: [] }
         ),
-        callPlanMetric<PlanMetricsHourlyUsage>(
+        callOptionalPlanMetric<PlanMetricsHourlyUsage>(
           session,
           `/plans/${planId}/metrics/hourly-usage`,
-          query
+          query,
+          { hours: input.hours, total_gb: 0, hourly: [] }
         ),
       ]);
 
@@ -506,12 +512,12 @@ export async function getPlanMetrics(
       supported: true,
       hours: input.hours,
       summary: summary.data,
-      throughput: throughput.data,
-      latency: latency.data,
-      errors: errors.data,
-      statusCodes: statusCodes.data,
-      destinations: destinations.data,
-      hourlyUsage: hourlyUsage.data,
+      throughput,
+      latency,
+      errors,
+      statusCodes,
+      destinations,
+      hourlyUsage,
     };
   } catch (error) {
     if (isFlashProxyError(error)) {
@@ -601,6 +607,25 @@ async function callPlanMetric<TData>(
         success: false,
         errorCode: error.code,
       });
+    }
+
+    throw error;
+  }
+}
+
+async function callOptionalPlanMetric<TData>(
+  session: AuthenticatedSession,
+  path: `/${string}`,
+  query: Record<string, number>,
+  fallback: TData
+) {
+  try {
+    const result = await callPlanMetric<TData>(session, path, query);
+
+    return result.data;
+  } catch (error) {
+    if (isFlashProxyError(error) && error.code === "METRICS_NOT_SUPPORTED") {
+      return fallback;
     }
 
     throw error;
