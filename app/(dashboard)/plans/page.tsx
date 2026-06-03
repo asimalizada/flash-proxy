@@ -1,5 +1,13 @@
-import { PagePlaceholder } from "@/components/shell/page-placeholder";
+import { PlansScreen } from "@/components/plans/plans-screen";
 
-export default function PlansPage() {
-  return <PagePlaceholder title="Plans" />;
+type PlansPageProps = {
+  searchParams?: Promise<{
+    created?: string;
+  }>;
+};
+
+export default async function PlansPage({ searchParams }: PlansPageProps) {
+  const params = await searchParams;
+
+  return <PlansScreen createdPlanId={params?.created} />;
 }

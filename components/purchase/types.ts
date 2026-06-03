@@ -25,6 +25,10 @@ export type PriceCheckResult = {
   price: PriceCheckData;
 };
 
+export type CreatedPlanResult = {
+  plan_id?: string;
+};
+
 export type PurchaseDraft = {
   product: PurchaseProduct;
   billingType: BillingType;

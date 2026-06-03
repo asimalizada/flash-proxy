@@ -1,13 +1,16 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   ArrowRight,
   BadgeDollarSign,
   Loader2,
+  ShoppingCart,
 } from "lucide-react";
 
+import { CreatePlanDialog } from "@/components/purchase/create-plan-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,6 +25,7 @@ import {
 import { PurchaseStepper } from "@/components/purchase/stepper";
 import type {
   BillingType,
+  CreatedPlanResult,
   Direction,
   PriceCheckResult,
   PurchaseDraft,
@@ -36,6 +40,7 @@ import { cn } from "@/lib/utils";
 import styles from "@/components/purchase/price-check-form.module.css";
 
 export function PriceCheckForm() {
+  const router = useRouter();
   const [activeStep, setActiveStep] = useState<WizardStep>(0);
   const [direction, setDirection] = useState<Direction>("forward");
   const [draft, setDraft] = useState<PurchaseDraft>({
@@ -52,6 +57,9 @@ export function PriceCheckForm() {
   const [result, setResult] = useState<PriceCheckResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [purchaseIntentKey, setPurchaseIntentKey] = useState<string | null>(null);
 
   const handlers: PurchaseDraftHandlers = {
     onProductChange: handleProductChange,
@@ -79,6 +87,7 @@ export function PriceCheckForm() {
     }));
     setResult(null);
     setError(null);
+    setPurchaseIntentKey(null);
   }
 
   function goToStep(step: WizardStep) {
@@ -102,6 +111,7 @@ export function PriceCheckForm() {
     }));
     setResult(null);
     setError(null);
+    setPurchaseIntentKey(null);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -132,10 +142,54 @@ export function PriceCheckForm() {
       }
 
       setResult(json.data);
+      setPurchaseIntentKey((current) => current ?? crypto.randomUUID());
     } catch {
       setError("Unable to reach the pricing service");
     } finally {
       setIsChecking(false);
+    }
+  }
+
+  async function handleCreatePlan() {
+    if (!result) {
+      return;
+    }
+
+    const idempotencyKey = purchaseIntentKey ?? crypto.randomUUID();
+    setPurchaseIntentKey(idempotencyKey);
+    setIsCreating(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/plans", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": idempotencyKey,
+        },
+        body: JSON.stringify(getProductPayload(draft)),
+      });
+      const json = (await response.json()) as
+        | { success: true; data: CreatedPlanResult }
+        | { success: false; error?: { message?: string } };
+
+      if (!response.ok || !json.success) {
+        setError(
+          json.success === false
+            ? (json.error?.message ?? "Unable to create plan")
+            : "Unable to create plan"
+        );
+        return;
+      }
+
+      const planId = json.data.plan_id;
+      setIsCreateDialogOpen(false);
+      router.push(planId ? `/plans?created=${planId}` : "/plans");
+      router.refresh();
+    } catch {
+      setError("Unable to create plan");
+    } finally {
+      setIsCreating(false);
     }
   }
 
@@ -207,23 +261,40 @@ export function PriceCheckForm() {
 
             <WizardPrimaryAction
               activeStep={activeStep}
+              hasQuotedPrice={Boolean(result)}
               isChecking={isChecking}
+              onConfirmPurchase={() => setIsCreateDialogOpen(true)}
               onContinue={() => goToStep((activeStep + 1) as WizardStep)}
             />
           </div>
         </form>
       </Card>
+
+      {result ? (
+        <CreatePlanDialog
+          draft={draft}
+          isCreating={isCreating}
+          onConfirm={() => void handleCreatePlan()}
+          onOpenChange={setIsCreateDialogOpen}
+          open={isCreateDialogOpen}
+          result={result}
+        />
+      ) : null}
     </div>
   );
 }
 
 function WizardPrimaryAction({
   activeStep,
+  hasQuotedPrice,
   isChecking,
+  onConfirmPurchase,
   onContinue,
 }: {
   activeStep: WizardStep;
+  hasQuotedPrice: boolean;
   isChecking: boolean;
+  onConfirmPurchase: () => void;
   onContinue: () => void;
 }) {
   if (activeStep < 2) {
@@ -231,6 +302,15 @@ function WizardPrimaryAction({
       <Button className="sm:min-w-40" onClick={onContinue} type="button">
         Continue
         <ArrowRight className="size-4" />
+      </Button>
+    );
+  }
+
+  if (hasQuotedPrice) {
+    return (
+      <Button className="sm:min-w-44" onClick={onConfirmPurchase} type="button">
+        <ShoppingCart className="size-4" />
+        Confirm purchase
       </Button>
     );
   }
