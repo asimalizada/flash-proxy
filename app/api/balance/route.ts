@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 import { requireSession, SessionError } from "@/lib/auth/session";
 import { BalanceError, getBalance } from "@/lib/balance/service";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await requireSession();
-    const data = await getBalance(session);
+    const data = await getBalance(session, request);
 
     return NextResponse.json({
       success: true,
@@ -26,6 +26,15 @@ export async function GET() {
       );
     }
 
-    throw error;
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "Unable to load balance",
+        },
+      },
+      { status: 500 }
+    );
   }
 }

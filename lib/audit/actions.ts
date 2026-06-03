@@ -9,6 +9,7 @@ export const AUDIT_ACTIONS = {
   PLAN_VIEWED: "plan_viewed",
   PLAN_USAGE_VIEWED: "plan_usage_viewed",
   PRICE_CHECKED: "price_checked",
+  PLAN_CREATION_FAILED: "plan_creation_failed",
   PLAN_CREATED: "plan_created",
   PLAN_EXTENDED: "plan_extended",
   ALLOWED_IPS_UPDATED: "allowed_ips_updated",

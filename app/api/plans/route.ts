@@ -71,10 +71,10 @@ export async function POST(request: Request) {
       await writeAuditLog({
         sessionId: session.id,
         apiKeyHash: session.apiKeyHash,
-        action: AUDIT_ACTIONS.PLAN_CREATED,
+        action: AUDIT_ACTIONS.PLAN_CREATION_FAILED,
         resourceType: AUDIT_RESOURCE_TYPES.PLAN,
         metadata: {
-          status: "validation_error",
+          reason: "validation_error",
         },
         request,
       });
