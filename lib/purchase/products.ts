@@ -120,6 +120,10 @@ export const POOL_PRODUCTS = [
   "pool5",
 ] as const satisfies readonly PurchaseProduct[];
 
+export const POOL_PRODUCT_OPTIONS = PRODUCT_OPTIONS.filter((option) =>
+  (POOL_PRODUCTS as readonly string[]).includes(option.value)
+);
+
 export const DURATION_OPTIONS = [
   { value: "1_hour", label: "1 hour" },
   { value: "1_day", label: "1 day" },

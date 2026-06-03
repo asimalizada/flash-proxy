@@ -1,0 +1,42 @@
+.stepPanel {
+  will-change: transform, opacity;
+}
+
+.forward {
+  animation: slideInForward 180ms ease-out;
+}
+
+.back {
+  animation: slideInBack 180ms ease-out;
+}
+
+@keyframes slideInForward {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInBack {
+  from {
+    opacity: 0;
+    transform: translateX(-18px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .forward,
+  .back {
+    animation: none;
+  }
+}
