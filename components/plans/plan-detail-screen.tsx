@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   ArrowLeft,
   CircleAlert,
   Copy,
@@ -16,12 +17,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { FlashProxyPlan } from "@/lib/plans/types";
+import type { FlashProxyPlan, PlanUsageData } from "@/lib/plans/types";
 import {
   formatBytesToGb,
   getPlanCost,
   getPlanProductDisplay,
 } from "@/lib/plans/presentation";
+import { UsageChart } from "@/components/dashboard/usage-chart";
 
 type PlanDetailScreenProps = {
   planId: string;
@@ -37,6 +39,19 @@ type PlanResponse =
       error?: {
         code?: string;
         message?: string;
+    };
+    };
+
+type PlanUsageResponse =
+  | {
+      success: true;
+      data: PlanUsageData;
+    }
+  | {
+      success: false;
+      error?: {
+        code?: string;
+        message?: string;
       };
     };
 
@@ -45,6 +60,9 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [usageData, setUsageData] = useState<PlanUsageData | null>(null);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const [isUsageLoading, setIsUsageLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +110,52 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
     };
   }, [planId]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUsage() {
+      setIsUsageLoading(true);
+      setUsageError(null);
+
+      try {
+        const response = await fetch(`/api/plans/${planId}/usage`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const json = (await response.json()) as PlanUsageResponse;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok || !json.success) {
+          setUsageError(
+            json.success === false
+              ? (json.error?.message ?? "Usage unavailable")
+              : "Usage unavailable"
+          );
+          return;
+        }
+
+        setUsageData(json.data);
+      } catch {
+        if (!cancelled) {
+          setUsageError("Usage unavailable");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsUsageLoading(false);
+        }
+      }
+    }
+
+    void loadUsage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [planId]);
+
   const product = useMemo(
     () => getPlanProductDisplay(data?.product),
     [data?.product]
@@ -100,6 +164,13 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
   const maxBytes = data?.limits?.max_bytes ?? null;
   const usagePercent =
     maxBytes && maxBytes > 0 ? Math.round((bytesUsed / maxBytes) * 100) : null;
+  const effectiveUsagePercent =
+    usageData?.usage?.usage_percent ?? usagePercent;
+  const usageBytesUsed =
+    usageData?.usage?.bytes_used ?? data?.limits?.bytes_used;
+  const usageBytesRemaining = usageData?.usage?.bytes_remaining;
+  const usageMaxBytes =
+    usageData?.usage?.max_bytes ?? data?.limits?.max_bytes;
 
   async function handleCopy(key: string, value?: string | number | null) {
     if (!value) {
@@ -247,31 +318,65 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
             <div className="grid gap-4">
               <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
                 <CardHeader>
-                  <CardTitle>Usage</CardTitle>
+                  <div className="flex items-center justify-between gap-4">
+                    <CardTitle>Usage</CardTitle>
+                    {usageData?.period?.start || usageData?.period?.end ? (
+                      <span className="text-xs text-muted-foreground">
+                        {formatPeriod(
+                          usageData.period?.start,
+                          usageData.period?.end
+                        )}
+                      </span>
+                    ) : null}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
                     <div className="mb-2 flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Consumption</span>
                       <span className="font-medium">
-                        {usagePercent === null ? "--" : `${usagePercent}%`}
+                        {effectiveUsagePercent === null
+                          ? "--"
+                          : `${effectiveUsagePercent}%`}
                       </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.max(usagePercent ?? 0, 4)}%` }}
+                        style={{
+                          width: `${Math.max(effectiveUsagePercent ?? 0, 4)}%`,
+                        }}
                       />
                     </div>
                   </div>
-                  <SummaryRow
-                    label="Bytes used"
-                    value={formatBytesToGb(data.limits?.bytes_used)}
-                  />
-                  <SummaryRow
-                    label="Max bandwidth"
-                    value={formatBytesToGb(data.limits?.max_bytes)}
-                  />
+                  {isUsageLoading ? (
+                    <div className="space-y-3">
+                      <div className="h-4 w-24 rounded-md bg-primary/10" />
+                      <div className="h-28 rounded-md bg-background/56" />
+                      <div className="h-10 rounded-md bg-muted/60" />
+                      <div className="h-10 rounded-md bg-muted/60" />
+                    </div>
+                  ) : usageError ? (
+                    <div className="rounded-md border border-border/70 bg-background/52 px-3 py-3 text-sm text-muted-foreground">
+                      {usageError}
+                    </div>
+                  ) : (
+                    <>
+                      <UsageChart data={usageData?.daily_breakdown ?? []} />
+                      <SummaryRow
+                        label="Bytes used"
+                        value={formatBytesToGb(usageBytesUsed)}
+                      />
+                      <SummaryRow
+                        label="Bytes remaining"
+                        value={formatBytesToGb(usageBytesRemaining)}
+                      />
+                      <SummaryRow
+                        label="Max bandwidth"
+                        value={formatBytesToGb(usageMaxBytes)}
+                      />
+                    </>
+                  )}
                   <SummaryRow
                     label="Max GB"
                     value={formatNumber(data.limits?.max_gb, "GB")}
@@ -472,4 +577,15 @@ function formatNumber(value?: number | null, suffix?: string) {
   }
 
   return suffix ? `${value} ${suffix}` : String(value);
+}
+
+function formatPeriod(start?: string, end?: string) {
+  const formattedStart = formatDate(start);
+  const formattedEnd = formatDate(end);
+
+  if (formattedStart === "--" || formattedEnd === "--") {
+    return "Current period";
+  }
+
+  return `${formattedStart} - ${formattedEnd}`;
 }

@@ -79,3 +79,25 @@ export type ListPlansQuery = {
   order?: SortOrder;
   search?: string;
 };
+
+export type PlanUsageData = {
+  plan_id?: string;
+  product?: string;
+  billing_type?: string;
+  usage?: {
+    bytes_used?: number;
+    bytes_used_formatted?: string;
+    bytes_remaining?: number;
+    bytes_remaining_formatted?: string;
+    max_bytes?: number;
+    usage_percent?: number;
+  };
+  period?: {
+    start?: string;
+    end?: string;
+  };
+  daily_breakdown?: Array<{
+    date?: string;
+    bytes_used?: number;
+  }>;
+};

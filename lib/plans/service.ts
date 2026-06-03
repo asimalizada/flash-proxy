@@ -7,7 +7,11 @@ import { writeApiRequestLog } from "@/lib/audit/request-log";
 import type { AuthenticatedSession } from "@/lib/auth/session";
 import { flashProxyRequest } from "@/lib/flashproxy/client";
 import { isFlashProxyError } from "@/lib/flashproxy/errors";
-import type { ListPlansQuery, PlansListData } from "@/lib/plans/types";
+import type {
+  ListPlansQuery,
+  PlansListData,
+  PlanUsageData,
+} from "@/lib/plans/types";
 import type { CreatePlanPayload } from "@/lib/validation/purchase";
 
 import type { FlashProxyPlan } from "./types";
@@ -243,6 +247,83 @@ export async function getPlan(
           apiKeyHash: session.apiKeyHash,
           action: AUDIT_ACTIONS.PLAN_VIEWED,
           resourceType: AUDIT_RESOURCE_TYPES.PLAN,
+          resourceId: planId,
+          metadata: {
+            status: "upstream_error",
+            error_code: error.code,
+          },
+          request,
+        });
+      }
+
+      throw new PlansError(
+        error.status === 0 ? 502 : error.status,
+        error.code,
+        error.message
+      );
+    }
+
+    throw error;
+  }
+}
+
+export async function getPlanUsage(
+  session: AuthenticatedSession,
+  planId: string,
+  request?: Request
+): Promise<PlanUsageData> {
+  const path = `/plans/${planId}/usage` as const;
+
+  try {
+    const result = await flashProxyRequest<PlanUsageData>({
+      apiKey: session.apiKey,
+      method: "GET",
+      path,
+    });
+
+    await writeApiRequestLog({
+      sessionId: session.id,
+      method: "GET",
+      path,
+      statusCode: result.status,
+      durationMs: result.durationMs,
+      success: true,
+    });
+
+    if (request) {
+      await writeAuditLog({
+        sessionId: session.id,
+        apiKeyHash: session.apiKeyHash,
+        action: AUDIT_ACTIONS.PLAN_USAGE_VIEWED,
+        resourceType: AUDIT_RESOURCE_TYPES.USAGE,
+        resourceId: planId,
+        metadata: {
+          status: "success",
+          product: result.data.product,
+        },
+        request,
+      });
+    }
+
+    return result.data;
+  } catch (error) {
+    if (isFlashProxyError(error)) {
+      await writeApiRequestLog({
+        sessionId: session.id,
+        method: "GET",
+        path,
+        statusCode: error.status || null,
+        durationMs: error.durationMs,
+        success: false,
+        errorCode: error.code,
+      });
+
+      if (request) {
+        await writeAuditLog({
+          sessionId: session.id,
+          apiKeyHash: session.apiKeyHash,
+          action: AUDIT_ACTIONS.PLAN_USAGE_VIEWED,
+          resourceType: AUDIT_RESOURCE_TYPES.USAGE,
           resourceId: planId,
           metadata: {
             status: "upstream_error",
