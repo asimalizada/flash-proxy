@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarDays, HardDrive, Loader2, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, CircleAlert, HardDrive, Loader2, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,9 +39,14 @@ export function ExtendPlanDialog({
   onOpenChange,
   plan,
 }: ExtendPlanDialogProps) {
-  const normalizedProduct = normalizePlanProduct(plan.product);
+  const normalizedProduct = normalizePlanProduct(plan.product) ?? "";
   const [addBandwidthGb, setAddBandwidthGb] = useState("5");
   const [addDays, setAddDays] = useState("30");
+  const [quote, setQuote] = useState<Quote>({
+    status: "loading",
+    message: "Loading extension price",
+  });
+  const [isQuoteLoading, setIsQuoteLoading] = useState(false);
 
   const mode = useMemo(() => {
     if (normalizedProduct === "unlimited_residential") {
@@ -61,6 +66,110 @@ export function ExtendPlanDialog({
 
   const title =
     mode === "dedicated" ? "Extend dedicated plan" : "Extend plan";
+  const payload = useMemo(() => {
+    if (mode === "dedicated") {
+      return { extend_30_days: true as const };
+    }
+
+    if (mode === "hybrid") {
+      return {
+        add_bandwidth_gb: addBandwidthGb ? Number(addBandwidthGb) : undefined,
+        add_days: addDays ? Number(addDays) : undefined,
+      };
+    }
+
+    return {
+      add_bandwidth_gb: addBandwidthGb ? Number(addBandwidthGb) : undefined,
+    };
+  }, [addBandwidthGb, addDays, mode]);
+  const canConfirm =
+    !isSubmitting &&
+    !isQuoteLoading &&
+    mode !== "unsupported" &&
+    quote.status === "ready";
+
+  useEffect(() => {
+    if (!isOpen || mode === "unsupported") {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadQuote() {
+      setIsQuoteLoading(true);
+      setQuote({
+        status: "loading",
+        message: "Loading extension price",
+      });
+
+      try {
+        const response = await fetch(`/api/plans/${plan.plan_id}/extend/price`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          body: JSON.stringify(payload),
+        });
+        const json = (await response.json()) as
+          | {
+              success: true;
+              data: {
+                cost_cents?: number;
+                cost_formatted?: string;
+                items?: Array<{
+                  request?: Record<string, unknown>;
+                  price?: {
+                    mode?: string;
+                    gb_required?: number;
+                    allocation_available?: number;
+                  };
+                }>;
+              };
+            }
+          | { success: false; error?: { message?: string } };
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok || !json.success) {
+          setQuote({
+            status: "unavailable",
+            message:
+              json.success === false
+                ? (json.error?.message ?? "Unable to check extension price")
+                : "Unable to check extension price",
+          });
+          return;
+        }
+
+        setQuote({
+          status: "ready",
+          costCents: json.data.cost_cents ?? 0,
+          costFormatted: json.data.cost_formatted,
+          lines: buildQuoteLines(json.data.items ?? []),
+        });
+      } catch {
+        if (!cancelled) {
+          setQuote({
+            status: "unavailable",
+            message: "Unable to check extension price",
+          });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsQuoteLoading(false);
+        }
+      }
+    }
+
+    void loadQuote();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, mode, payload, plan.plan_id]);
 
   return (
     <Dialog onOpenChange={onOpenChange} open={isOpen}>
@@ -136,6 +245,13 @@ export function ExtendPlanDialog({
           </div>
         ) : null}
 
+        {mode !== "unsupported" ? (
+          <QuoteCard
+            isLoading={isQuoteLoading}
+            quote={quote}
+          />
+        ) : null}
+
         <DialogFooter>
           <Button
             disabled={isSubmitting}
@@ -146,24 +262,9 @@ export function ExtendPlanDialog({
             Cancel
           </Button>
           <Button
-            disabled={isSubmitting || mode === "unsupported"}
+            disabled={!canConfirm}
             onClick={() => {
-              if (mode === "dedicated") {
-                onConfirm({ extend_30_days: true });
-                return;
-              }
-
-              if (mode === "hybrid") {
-                onConfirm({
-                  add_bandwidth_gb: addBandwidthGb ? Number(addBandwidthGb) : undefined,
-                  add_days: addDays ? Number(addDays) : undefined,
-                });
-                return;
-              }
-
-              onConfirm({
-                add_bandwidth_gb: addBandwidthGb ? Number(addBandwidthGb) : undefined,
-              });
+              onConfirm(payload);
             }}
             type="button"
           >
@@ -173,6 +274,66 @@ export function ExtendPlanDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+type Quote =
+  | {
+      status: "ready";
+      costCents: number;
+      costFormatted?: string;
+      lines: string[];
+    }
+  | {
+      status: "loading" | "unavailable" | "invalid";
+      message: string;
+    };
+
+function QuoteCard({
+  isLoading,
+  quote,
+}: {
+  isLoading: boolean;
+  quote: Quote;
+}) {
+  if (isLoading || quote.status === "loading") {
+    return (
+      <div className="rounded-md border bg-background/56 px-4 py-3 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Loader2 className="size-4 animate-spin" />
+          Loading extension price
+        </div>
+      </div>
+    );
+  }
+
+  if (quote.status !== "ready") {
+    return (
+      <div className="rounded-md border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="flex items-center gap-2">
+          <CircleAlert className="size-4" />
+          {quote.message}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-md border bg-background/56 p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-muted-foreground">Estimated charge</p>
+          <p className="mt-1 text-2xl font-semibold tracking-normal">
+            {quote.costFormatted ?? formatCents(quote.costCents)}
+          </p>
+        </div>
+        <div className="space-y-1 text-right text-xs text-muted-foreground">
+          {quote.lines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -196,4 +357,40 @@ function FieldCard({
       {children}
     </div>
   );
+}
+
+function formatCents(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(value / 100);
+}
+
+function buildQuoteLines(
+  items: Array<{
+    request?: Record<string, unknown>;
+    price?: {
+      mode?: string;
+      gb_required?: number;
+      allocation_available?: number;
+    };
+  }>
+) {
+  return items.map((item) => {
+    const request = item.request ?? {};
+    const parts = [
+      typeof request.bandwidth_gb === "number"
+        ? `${request.bandwidth_gb} GB`
+        : null,
+      typeof request.duration === "string" ? formatDuration(request.duration) : null,
+      typeof request.quantity === "number" ? `${request.quantity} IPs` : null,
+      item.price?.mode ? `mode: ${item.price.mode}` : null,
+    ].filter(Boolean);
+
+    return parts.join(" • ") || "Extension price";
+  });
+}
+
+function formatDuration(value: string) {
+  return value.replaceAll("_", " ");
 }

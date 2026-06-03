@@ -10,11 +10,13 @@ import { flashProxyRequest } from "@/lib/flashproxy/client";
 import { isFlashProxyError } from "@/lib/flashproxy/errors";
 import type {
   BalanceData,
+  BalancePricingData,
   BalanceTransactionsData,
   ListBalanceTransactionsQuery,
 } from "@/lib/balance/types";
 
 const BALANCE_PATH = "/balance";
+const PRICING_PATH = "/balance/pricing";
 const TRANSACTIONS_PATH = "/balance/transactions";
 
 export class BalanceError extends Error {
@@ -110,6 +112,77 @@ export async function listBalanceTransactions(
   context?: RequestContext
 ) {
   return listBalanceTransactionsWithQuery(session, query, request, context, true);
+}
+
+export async function getBalancePricing(
+  session: AuthenticatedSession,
+  request?: Request
+) {
+  try {
+    const result = await flashProxyRequest<BalancePricingData>({
+      apiKey: session.apiKey,
+      method: "GET",
+      path: PRICING_PATH,
+    });
+
+    await writeApiRequestLog({
+      sessionId: session.id,
+      method: "GET",
+      path: PRICING_PATH,
+      statusCode: result.status,
+      durationMs: result.durationMs,
+      success: true,
+    });
+
+    if (request) {
+      await writeAuditLog({
+        sessionId: session.id,
+        apiKeyHash: session.apiKeyHash,
+        action: AUDIT_ACTIONS.PRICING_VIEWED,
+        resourceType: AUDIT_RESOURCE_TYPES.BALANCE,
+        metadata: {
+          status: "success",
+        },
+        request,
+      });
+    }
+
+    return result.data;
+  } catch (error) {
+    if (isFlashProxyError(error)) {
+      await writeApiRequestLog({
+        sessionId: session.id,
+        method: "GET",
+        path: PRICING_PATH,
+        statusCode: error.status || null,
+        durationMs: error.durationMs,
+        success: false,
+        errorCode: error.code,
+      });
+
+      if (request) {
+        await writeAuditLog({
+          sessionId: session.id,
+          apiKeyHash: session.apiKeyHash,
+          action: AUDIT_ACTIONS.PRICING_VIEWED,
+          resourceType: AUDIT_RESOURCE_TYPES.BALANCE,
+          metadata: {
+            status: "upstream_error",
+            error_code: error.code,
+          },
+          request,
+        });
+      }
+
+      throw new BalanceError(
+        error.status === 0 ? 502 : error.status,
+        error.code,
+        error.message
+      );
+    }
+
+    throw error;
+  }
 }
 
 async function listBalanceTransactionsWithQuery(

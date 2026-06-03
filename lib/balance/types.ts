@@ -38,6 +38,16 @@ export type BalanceTransactionsData = {
   pagination?: BalanceTransactionsPagination;
 };
 
+export type BalancePricingItem = {
+  billing?: "bandwidth" | "time" | "hybrid" | string;
+  price_per_gb?: number;
+  price_per_gb_formatted?: string;
+  price_per_day_cents?: number;
+  price_per_day_formatted?: string;
+};
+
+export type BalancePricingData = Record<string, BalancePricingItem>;
+
 export type ListBalanceTransactionsQuery = {
   page: number;
   per_page: number;
