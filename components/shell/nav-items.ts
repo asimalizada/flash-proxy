@@ -1,6 +1,5 @@
 import {
   Activity,
-  ChartNoAxesCombined,
   CreditCard,
   LayoutDashboard,
   Package,
@@ -23,11 +22,6 @@ export const dashboardNavItems = [
     label: "Plans",
     href: "/plans",
     icon: Package,
-  },
-  {
-    label: "Usage",
-    href: "/usage",
-    icon: ChartNoAxesCombined,
   },
   {
     label: "Balance",
