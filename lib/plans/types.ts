@@ -112,3 +112,96 @@ export type PlanExtensionData = {
   new_max_bytes?: number;
   new_expires_at?: string;
 };
+
+export type PlanMetricsSummary = {
+  hours?: number;
+  total_bytes?: number;
+  total_mb?: number;
+  total_connections?: number;
+  total_successes?: number;
+  total_errors?: number;
+  success_rate_pct?: number | null;
+  peak_concurrent?: number;
+  avg_mbps?: number;
+  peak_mbps?: number;
+};
+
+export type PlanMetricsThroughput = {
+  hours?: number;
+  bucket_minutes?: number;
+  rate_cap_mbps?: number | null;
+  series?: Array<{
+    bucket?: string;
+    mbps?: number;
+  }>;
+};
+
+export type PlanMetricsLatency = {
+  hours?: number;
+  bucket_minutes?: number;
+  series?: Array<{
+    bucket?: string;
+    p50?: number;
+    p95?: number;
+    p99?: number;
+  }>;
+};
+
+export type PlanMetricsErrors = {
+  hours?: number;
+  bucket_minutes?: number;
+  series?: Array<Record<string, number | string | undefined> & { bucket?: string }>;
+};
+
+export type PlanMetricsStatusCodes = {
+  hours?: number;
+  bucket_minutes?: number;
+  series?: Array<{
+    bucket?: string;
+    s2xx?: number;
+    s3xx?: number;
+    s4xx?: number;
+    s5xx?: number;
+  }>;
+};
+
+export type PlanMetricsDestinations = {
+  hours?: number;
+  destinations?: Array<{
+    destination?: string;
+    connections?: number;
+    successes?: number;
+    errors?: number;
+    mb_received?: number;
+    mb_sent?: number;
+    p95_ms?: number;
+  }>;
+};
+
+export type PlanMetricsHourlyUsage = {
+  hours?: number;
+  total_gb?: number;
+  hourly?: Array<{
+    hour?: string;
+    gb?: number;
+  }>;
+};
+
+export type PlanMetricsData =
+  | {
+      supported: true;
+      hours: number;
+      summary: PlanMetricsSummary;
+      throughput: PlanMetricsThroughput;
+      latency: PlanMetricsLatency;
+      errors: PlanMetricsErrors;
+      statusCodes: PlanMetricsStatusCodes;
+      destinations: PlanMetricsDestinations;
+      hourlyUsage: PlanMetricsHourlyUsage;
+    }
+  | {
+      supported: false;
+      hours: number;
+      code: "METRICS_NOT_SUPPORTED";
+      message: string;
+    };

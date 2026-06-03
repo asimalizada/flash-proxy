@@ -20,7 +20,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExtendPlanDialog } from "@/components/plans/extend-plan-dialog";
-import type { FlashProxyPlan, PlanUsageData } from "@/lib/plans/types";
+import { PlanMetricsPanel } from "@/components/plans/plan-metrics-panel";
+import type {
+  FlashProxyPlan,
+  PlanMetricsData,
+  PlanUsageData,
+} from "@/lib/plans/types";
 import {
   normalizePlanProduct,
   formatBytesToGb,
@@ -59,6 +64,19 @@ type PlanUsageResponse =
       };
     };
 
+type PlanMetricsResponse =
+  | {
+      success: true;
+      data: PlanMetricsData;
+    }
+  | {
+      success: false;
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
 export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
   const router = useRouter();
   const [data, setData] = useState<FlashProxyPlan | null>(null);
@@ -68,6 +86,9 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
   const [usageData, setUsageData] = useState<PlanUsageData | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [isUsageLoading, setIsUsageLoading] = useState(true);
+  const [metricsData, setMetricsData] = useState<PlanMetricsData | null>(null);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+  const [isMetricsLoading, setIsMetricsLoading] = useState(true);
   const [isExtendDialogOpen, setIsExtendDialogOpen] = useState(false);
   const [isExtending, setIsExtending] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -158,6 +179,52 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
     }
 
     void loadUsage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [planId, refreshNonce]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMetrics() {
+      setIsMetricsLoading(true);
+      setMetricsError(null);
+
+      try {
+        const response = await fetch(`/api/plans/${planId}/metrics?hours=24`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const json = (await response.json()) as PlanMetricsResponse;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok || !json.success) {
+          setMetricsError(
+            json.success === false
+              ? (json.error?.message ?? "Metrics unavailable")
+              : "Metrics unavailable"
+          );
+          return;
+        }
+
+        setMetricsData(json.data);
+      } catch {
+        if (!cancelled) {
+          setMetricsError("Metrics unavailable");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsMetricsLoading(false);
+        }
+      }
+    }
+
+    void loadMetrics();
 
     return () => {
       cancelled = true;
@@ -479,6 +546,12 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
               </Card>
             </div>
           </section>
+
+          <PlanMetricsPanel
+            data={metricsData}
+            error={metricsError}
+            isLoading={isMetricsLoading}
+          />
 
           {data.proxy_list?.length ? (
             <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">

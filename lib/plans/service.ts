@@ -10,6 +10,14 @@ import { isFlashProxyError } from "@/lib/flashproxy/errors";
 import type {
   ListPlansQuery,
   PlanExtensionData,
+  PlanMetricsData,
+  PlanMetricsDestinations,
+  PlanMetricsErrors,
+  PlanMetricsHourlyUsage,
+  PlanMetricsLatency,
+  PlanMetricsStatusCodes,
+  PlanMetricsSummary,
+  PlanMetricsThroughput,
   PlansListData,
   PlanUsageData,
 } from "@/lib/plans/types";
@@ -421,6 +429,178 @@ export async function extendPlan(
         error.code,
         error.message
       );
+    }
+
+    throw error;
+  }
+}
+
+export async function getPlanMetrics(
+  session: AuthenticatedSession,
+  planId: string,
+  input: {
+    hours: number;
+    request?: Request;
+  }
+): Promise<PlanMetricsData> {
+  const query = { hours: input.hours };
+  const summaryPath = `/plans/${planId}/metrics/summary` as const;
+
+  try {
+    const summary = await callPlanMetric<PlanMetricsSummary>(
+      session,
+      summaryPath,
+      query
+    );
+
+    const [throughput, latency, errors, statusCodes, destinations, hourlyUsage] =
+      await Promise.all([
+        callPlanMetric<PlanMetricsThroughput>(
+          session,
+          `/plans/${planId}/metrics/throughput`,
+          query
+        ),
+        callPlanMetric<PlanMetricsLatency>(
+          session,
+          `/plans/${planId}/metrics/latency`,
+          query
+        ),
+        callPlanMetric<PlanMetricsErrors>(
+          session,
+          `/plans/${planId}/metrics/errors`,
+          query
+        ),
+        callPlanMetric<PlanMetricsStatusCodes>(
+          session,
+          `/plans/${planId}/metrics/status-codes`,
+          query
+        ),
+        callPlanMetric<PlanMetricsDestinations>(
+          session,
+          `/plans/${planId}/metrics/destinations`,
+          { ...query, limit: 10 }
+        ),
+        callPlanMetric<PlanMetricsHourlyUsage>(
+          session,
+          `/plans/${planId}/metrics/hourly-usage`,
+          query
+        ),
+      ]);
+
+    if (input.request) {
+      await writeAuditLog({
+        sessionId: session.id,
+        apiKeyHash: session.apiKeyHash,
+        action: AUDIT_ACTIONS.METRICS_VIEWED,
+        resourceType: AUDIT_RESOURCE_TYPES.METRICS,
+        resourceId: planId,
+        metadata: {
+          status: "success",
+          hours: input.hours,
+        },
+        request: input.request,
+      });
+    }
+
+    return {
+      supported: true,
+      hours: input.hours,
+      summary: summary.data,
+      throughput: throughput.data,
+      latency: latency.data,
+      errors: errors.data,
+      statusCodes: statusCodes.data,
+      destinations: destinations.data,
+      hourlyUsage: hourlyUsage.data,
+    };
+  } catch (error) {
+    if (isFlashProxyError(error)) {
+      if (error.code === "METRICS_NOT_SUPPORTED") {
+        if (input.request) {
+          await writeAuditLog({
+            sessionId: session.id,
+            apiKeyHash: session.apiKeyHash,
+            action: AUDIT_ACTIONS.METRICS_VIEWED,
+            resourceType: AUDIT_RESOURCE_TYPES.METRICS,
+            resourceId: planId,
+            metadata: {
+              status: "unsupported",
+              hours: input.hours,
+              error_code: error.code,
+            },
+            request: input.request,
+          });
+        }
+
+        return {
+          supported: false,
+          hours: input.hours,
+          code: "METRICS_NOT_SUPPORTED",
+          message: error.message,
+        };
+      }
+
+      if (input.request) {
+        await writeAuditLog({
+          sessionId: session.id,
+          apiKeyHash: session.apiKeyHash,
+          action: AUDIT_ACTIONS.METRICS_VIEWED,
+          resourceType: AUDIT_RESOURCE_TYPES.METRICS,
+          resourceId: planId,
+          metadata: {
+            status: "upstream_error",
+            hours: input.hours,
+            error_code: error.code,
+          },
+          request: input.request,
+        });
+      }
+
+      throw new PlansError(
+        error.status === 0 ? 502 : error.status,
+        error.code,
+        error.message
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function callPlanMetric<TData>(
+  session: AuthenticatedSession,
+  path: `/${string}`,
+  query: Record<string, number>
+) {
+  try {
+    const result = await flashProxyRequest<TData>({
+      apiKey: session.apiKey,
+      method: "GET",
+      path,
+      query,
+    });
+
+    await writeApiRequestLog({
+      sessionId: session.id,
+      method: "GET",
+      path,
+      statusCode: result.status,
+      durationMs: result.durationMs,
+      success: true,
+    });
+
+    return result;
+  } catch (error) {
+    if (isFlashProxyError(error)) {
+      await writeApiRequestLog({
+        sessionId: session.id,
+        method: "GET",
+        path,
+        statusCode: error.status || null,
+        durationMs: error.durationMs,
+        success: false,
+        errorCode: error.code,
+      });
     }
 
     throw error;
