@@ -152,6 +152,10 @@ export const checkPriceRequestSchema = z
 
 export type CheckPriceRequestInput = z.infer<typeof checkPriceRequestSchema>;
 
+// Alias used by POST /api/plans — same shape, clearer name at that call site.
+export const createPlanRequestSchema = checkPriceRequestSchema;
+export type CreatePlanRequestInput = CheckPriceRequestInput;
+
 export type CreatePlanPayload = {
   product: PurchaseProduct;
   billing_type?: "bandwidth" | "time";

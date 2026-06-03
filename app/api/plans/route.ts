@@ -10,7 +10,7 @@ import { PlansError, createPlan, listPlans } from "@/lib/plans/service";
 import { listPlansQuerySchema } from "@/lib/validation/plans";
 import {
   buildCreatePlanPayload,
-  checkPriceRequestSchema,
+  createPlanRequestSchema,
 } from "@/lib/validation/purchase";
 
 function jsonError(status: number, code: string, message: string) {
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
       return jsonError(400, "INVALID_REQUEST", "Invalid plan creation request");
     }
 
-    const parsed = checkPriceRequestSchema.safeParse(body);
+    const parsed = createPlanRequestSchema.safeParse(body);
 
     if (!parsed.success) {
       await writeAuditLog({

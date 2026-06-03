@@ -27,7 +27,7 @@ type ExtendPlanDialogProps = {
     add_bandwidth_gb?: number;
     add_days?: number;
     extend_30_days?: true;
-  }) => void;
+  }, idempotencyKey: string) => void;
   onOpenChange: (open: boolean) => void;
   plan: FlashProxyPlan;
 };
@@ -264,7 +264,7 @@ export function ExtendPlanDialog({
           <Button
             disabled={!canConfirm}
             onClick={() => {
-              onConfirm(payload);
+              onConfirm(payload, crypto.randomUUID());
             }}
             type="button"
           >
