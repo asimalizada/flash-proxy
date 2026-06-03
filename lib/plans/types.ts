@@ -45,8 +45,12 @@ export type FlashProxyPlan = {
   status?: string;
   provider_user_id?: string;
   created_at?: string;
+  updated_at?: string;
+  activated_at?: string;
   billing?: PlanBilling;
+  purchase_price_cents?: number;
   end_user_reference?: string | null;
+  allowed_ips?: string[] | null;
 };
 
 export type PlansPagination = {

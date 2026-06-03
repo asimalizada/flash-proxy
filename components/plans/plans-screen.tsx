@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
+  ChevronRight,
   CircleAlert,
   Copy,
   Loader2,
@@ -22,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { FlashProxyPlan, PlansListData } from "@/lib/plans/types";
-import { getProductDisplay } from "@/components/purchase/purchase-utils";
+import { getPlanCost, getPlanProductDisplay } from "@/lib/plans/presentation";
 
 type PlansScreenProps = {
   createdPlanId?: string;
@@ -42,6 +45,7 @@ type PlansResponse =
     };
 
 export function PlansScreen({ createdPlanId }: PlansScreenProps) {
+  const router = useRouter();
   const [data, setData] = useState<PlansListData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -104,7 +108,11 @@ export function PlansScreen({ createdPlanId }: PlansScreenProps) {
 
   const totalMonthlySpend = useMemo(
     () =>
-      items.reduce((sum, item) => sum + (item.billing?.cost_cents ?? 0), 0) / 100,
+      items.reduce(
+        (sum, item) =>
+          sum + (item.billing?.cost_cents ?? item.purchase_price_cents ?? 0),
+        0
+      ) / 100,
     [items]
   );
 
@@ -187,15 +195,14 @@ export function PlansScreen({ createdPlanId }: PlansScreenProps) {
                   <TableHead>Plan ID</TableHead>
                   <TableHead>Username</TableHead>
                   <TableHead>Usage</TableHead>
+                  <TableHead>Cost</TableHead>
                   <TableHead>Expires</TableHead>
-                  <TableHead className="text-right">Connection</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {items.map((plan, index) => {
-                  const product = plan.product
-                    ? getProductDisplay(plan.product as never)
-                    : null;
+                  const product = getPlanProductDisplay(plan.product);
                   const used = plan.limits?.bytes_used ?? 0;
                   const max = plan.limits?.max_bytes ?? 0;
                   const usagePercent =
@@ -203,15 +210,17 @@ export function PlansScreen({ createdPlanId }: PlansScreenProps) {
 
                   return (
                     <TableRow
+                      className="cursor-pointer"
                       key={plan.plan_id || `${plan.product || "plan"}-${index}`}
+                      onClick={() =>
+                        plan.plan_id ? router.push(`/plans/${plan.plan_id}`) : undefined
+                      }
                     >
                       <TableCell>
                         <div className="space-y-1">
-                          <div className="font-medium">
-                            {product?.label ?? plan.product ?? "--"}
-                          </div>
+                          <div className="font-medium">{product.label}</div>
                           <div className="text-xs text-muted-foreground">
-                            {plan.billing_type ?? product?.group ?? "--"}
+                            {plan.billing_type ?? product.group}
                           </div>
                         </div>
                       </TableCell>
@@ -229,18 +238,38 @@ export function PlansScreen({ createdPlanId }: PlansScreenProps) {
                       <TableCell>
                         {usagePercent === null ? "--" : `${usagePercent}%`}
                       </TableCell>
+                      <TableCell>{getPlanCost(plan)}</TableCell>
                       <TableCell>{formatDate(plan.expires_at)}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          disabled={!plan.connection?.format}
-                          onClick={() => void handleCopy(plan)}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <Copy className="size-4" />
-                          {copiedPlanId === plan.plan_id ? "Copied" : "Copy"}
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            disabled={!plan.connection?.format}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleCopy(plan);
+                            }}
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            <Copy className="size-4" />
+                            {copiedPlanId === plan.plan_id ? "Copied" : "Copy"}
+                          </Button>
+                          {plan.plan_id ? (
+                            <Button
+                              asChild
+                              onClick={(event) => event.stopPropagation()}
+                              size="sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <Link href={`/plans/${plan.plan_id}`}>
+                                Open
+                                <ChevronRight className="size-4" />
+                              </Link>
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

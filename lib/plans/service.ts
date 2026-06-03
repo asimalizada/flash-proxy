@@ -185,3 +185,80 @@ export async function createPlan(
     throw error;
   }
 }
+
+export async function getPlan(
+  session: AuthenticatedSession,
+  planId: string,
+  request?: Request
+): Promise<FlashProxyPlan> {
+  const path = `/plans/${planId}` as const;
+
+  try {
+    const result = await flashProxyRequest<FlashProxyPlan>({
+      apiKey: session.apiKey,
+      method: "GET",
+      path,
+    });
+
+    await writeApiRequestLog({
+      sessionId: session.id,
+      method: "GET",
+      path,
+      statusCode: result.status,
+      durationMs: result.durationMs,
+      success: true,
+    });
+
+    if (request) {
+      await writeAuditLog({
+        sessionId: session.id,
+        apiKeyHash: session.apiKeyHash,
+        action: AUDIT_ACTIONS.PLAN_VIEWED,
+        resourceType: AUDIT_RESOURCE_TYPES.PLAN,
+        resourceId: result.data.plan_id ?? planId,
+        metadata: {
+          status: "success",
+          product: result.data.product,
+        },
+        request,
+      });
+    }
+
+    return result.data;
+  } catch (error) {
+    if (isFlashProxyError(error)) {
+      await writeApiRequestLog({
+        sessionId: session.id,
+        method: "GET",
+        path,
+        statusCode: error.status || null,
+        durationMs: error.durationMs,
+        success: false,
+        errorCode: error.code,
+      });
+
+      if (request) {
+        await writeAuditLog({
+          sessionId: session.id,
+          apiKeyHash: session.apiKeyHash,
+          action: AUDIT_ACTIONS.PLAN_VIEWED,
+          resourceType: AUDIT_RESOURCE_TYPES.PLAN,
+          resourceId: planId,
+          metadata: {
+            status: "upstream_error",
+            error_code: error.code,
+          },
+          request,
+        });
+      }
+
+      throw new PlansError(
+        error.status === 0 ? 502 : error.status,
+        error.code,
+        error.message
+      );
+    }
+
+    throw error;
+  }
+}

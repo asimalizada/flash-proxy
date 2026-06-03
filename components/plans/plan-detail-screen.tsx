@@ -1,0 +1,475 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowLeft,
+  CircleAlert,
+  Copy,
+  Globe,
+  KeyRound,
+  Loader2,
+  Network,
+  User,
+} from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { FlashProxyPlan } from "@/lib/plans/types";
+import {
+  formatBytesToGb,
+  getPlanCost,
+  getPlanProductDisplay,
+} from "@/lib/plans/presentation";
+
+type PlanDetailScreenProps = {
+  planId: string;
+};
+
+type PlanResponse =
+  | {
+      success: true;
+      data: FlashProxyPlan;
+    }
+  | {
+      success: false;
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
+export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
+  const [data, setData] = useState<FlashProxyPlan | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlan() {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch(`/api/plans/${planId}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+        const json = (await response.json()) as PlanResponse;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok || !json.success) {
+          setError(
+            json.success === false
+              ? (json.error?.message ?? "Unable to load plan")
+              : "Unable to load plan"
+          );
+          return;
+        }
+
+        setData(json.data);
+      } catch {
+        if (!cancelled) {
+          setError("Unable to load plan");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadPlan();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [planId]);
+
+  const product = useMemo(
+    () => getPlanProductDisplay(data?.product),
+    [data?.product]
+  );
+  const bytesUsed = data?.limits?.bytes_used ?? 0;
+  const maxBytes = data?.limits?.max_bytes ?? null;
+  const usagePercent =
+    maxBytes && maxBytes > 0 ? Math.round((bytesUsed / maxBytes) * 100) : null;
+
+  async function handleCopy(key: string, value?: string | number | null) {
+    if (!value) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(String(value));
+    setCopiedKey(key);
+    window.setTimeout(() => {
+      setCopiedKey((current) => (current === key ? null : current));
+    }, 1800);
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <Button asChild size="sm" type="button" variant="outline">
+          <Link href="/plans">
+            <ArrowLeft className="size-4" />
+            Back to plans
+          </Link>
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <Card className="bg-card/86">
+          <CardContent className="flex h-80 items-center justify-center text-muted-foreground">
+            <Loader2 className="size-5 animate-spin" />
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card className="bg-card/86">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 rounded-md border border-destructive/25 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <CircleAlert className="size-4" />
+              {error}
+            </div>
+          </CardContent>
+        </Card>
+      ) : data ? (
+        <>
+          <section className="relative overflow-hidden rounded-md border bg-card/88 px-5 py-5 shadow-[0_18px_50px_color-mix(in_oklch,var(--foreground)_6%,transparent)]">
+            <div className="absolute inset-y-0 right-0 w-1/2 bg-[linear-gradient(115deg,transparent,color-mix(in_oklch,var(--primary)_9%,transparent))]" />
+            <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+                  <Network className="size-3.5 text-primary" />
+                  {product.group}
+                </div>
+                <h1 className="mt-2 text-3xl font-semibold tracking-normal">
+                  {product.label}
+                </h1>
+                <p className="mt-2 font-mono text-sm text-muted-foreground">
+                  {data.plan_id}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={data.status === "active" ? "success" : "secondary"}>
+                  {data.status ?? "--"}
+                </Badge>
+                <Badge variant="secondary">
+                  {data.billing_type ?? product.group}
+                </Badge>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Purchase" value={getPlanCost(data)} />
+            <MetricCard label="Used" value={formatBytesToGb(bytesUsed)} />
+            <MetricCard label="Limit" value={formatBytesToGb(maxBytes)} />
+            <MetricCard label="Expires" value={formatDate(data.expires_at)} />
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+            <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <CardTitle>Connection</CardTitle>
+                <Button
+                  disabled={!data.connection?.format}
+                  onClick={() => void handleCopy("format", data.connection?.format)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <Copy className="size-4" />
+                  {copiedKey === "format" ? "Copied" : "Copy format"}
+                </Button>
+              </CardHeader>
+              <CardContent className="grid gap-4">
+                <DetailCard
+                  action={
+                    <CopyButton
+                      copied={copiedKey === "username"}
+                      onClick={() =>
+                        void handleCopy("username", data.proxy_username)
+                      }
+                    />
+                  }
+                  icon={<User className="size-4 text-primary" />}
+                  label="Username"
+                  value={data.proxy_username}
+                />
+                <DetailCard
+                  action={
+                    <CopyButton
+                      copied={copiedKey === "password"}
+                      onClick={() =>
+                        void handleCopy("password", data.proxy_password)
+                      }
+                    />
+                  }
+                  icon={<KeyRound className="size-4 text-primary" />}
+                  label="Password"
+                  value={data.proxy_password}
+                />
+                <DetailCard
+                  action={
+                    <CopyButton
+                      copied={copiedKey === "host"}
+                      onClick={() =>
+                        void handleCopy("host", data.connection?.hostname)
+                      }
+                    />
+                  }
+                  icon={<Globe className="size-4 text-primary" />}
+                  label="Hostname"
+                  value={data.connection?.hostname}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <DetailCard
+                    icon={<Network className="size-4 text-primary" />}
+                    label="HTTP port"
+                    value={formatNumber(data.connection?.port_http)}
+                  />
+                  <DetailCard
+                    icon={<Network className="size-4 text-primary" />}
+                    label="SOCKS port"
+                    value={formatNumber(data.connection?.port_socks)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="grid gap-4">
+              <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
+                <CardHeader>
+                  <CardTitle>Usage</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Consumption</span>
+                      <span className="font-medium">
+                        {usagePercent === null ? "--" : `${usagePercent}%`}
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${Math.max(usagePercent ?? 0, 4)}%` }}
+                      />
+                    </div>
+                  </div>
+                  <SummaryRow
+                    label="Bytes used"
+                    value={formatBytesToGb(data.limits?.bytes_used)}
+                  />
+                  <SummaryRow
+                    label="Max bandwidth"
+                    value={formatBytesToGb(data.limits?.max_bytes)}
+                  />
+                  <SummaryRow
+                    label="Max GB"
+                    value={formatNumber(data.limits?.max_gb, "GB")}
+                  />
+                  <SummaryRow
+                    label="Max Mbps"
+                    value={formatNumber(data.limits?.max_mbps, "Mbps")}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
+                <CardHeader>
+                  <CardTitle>Plan data</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <SummaryRow label="Created" value={formatDateTime(data.created_at)} />
+                  <SummaryRow
+                    label="Activated"
+                    value={formatDateTime(data.activated_at)}
+                  />
+                  <SummaryRow
+                    label="Updated"
+                    value={formatDateTime(data.updated_at)}
+                  />
+                  <SummaryRow
+                    label="Reference"
+                    value={data.end_user_reference ?? "--"}
+                  />
+                  <SummaryRow
+                    label="Provider ID"
+                    value={data.provider_user_id ?? "--"}
+                  />
+                  <SummaryRow
+                    label="Allowed IPs"
+                    value={data.allowed_ips?.length ? data.allowed_ips.join(", ") : "--"}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          {data.proxy_list?.length ? (
+            <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
+              <CardHeader>
+                <CardTitle>Proxy list</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {data.proxy_list.map((proxy, index) => (
+                  <div
+                    className="flex flex-col gap-3 rounded-md border bg-background/52 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    key={`${proxy.host}-${proxy.port}-${index}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">
+                        {proxy.host}:{proxy.port}
+                      </p>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {proxy.full ?? "--"}
+                      </p>
+                    </div>
+                    <Button
+                      disabled={!proxy.full}
+                      onClick={() => void handleCopy(`proxy-${index}`, proxy.full)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <Copy className="size-4" />
+                      {copiedKey === `proxy-${index}` ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <Card className="bg-card/84">
+      <CardContent className="p-4">
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <p className="mt-1 text-3xl font-semibold tracking-normal">{value}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DetailCard({
+  action,
+  icon,
+  label,
+  value,
+}: {
+  action?: React.ReactNode;
+  icon: React.ReactNode;
+  label: string;
+  value?: string;
+}) {
+  return (
+    <div className="rounded-md border bg-background/56 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="rounded-md border bg-background/70 p-2">{icon}</span>
+          <div>
+            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className="mt-1 break-all font-medium">{value ?? "--"}</p>
+          </div>
+        </div>
+        {action}
+      </div>
+    </div>
+  );
+}
+
+function CopyButton({
+  copied,
+  onClick,
+}: {
+  copied: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button onClick={onClick} size="sm" type="button" variant="outline">
+      <Copy className="size-4" />
+      {copied ? "Copied" : "Copy"}
+    </Button>
+  );
+}
+
+function SummaryRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-md border bg-background/52 px-3 py-2">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="max-w-[60%] text-right text-sm font-medium">{value}</span>
+    </div>
+  );
+}
+
+function formatDate(value?: string | null) {
+  if (!value) {
+    return "No expiry";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "--";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) {
+    return "--";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "--";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatNumber(value?: number | null, suffix?: string) {
+  if (typeof value !== "number") {
+    return "--";
+  }
+
+  return suffix ? `${value} ${suffix}` : String(value);
+}
