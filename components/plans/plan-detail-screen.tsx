@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
@@ -11,14 +12,17 @@ import {
   KeyRound,
   Loader2,
   Network,
+  Plus,
   User,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ExtendPlanDialog } from "@/components/plans/extend-plan-dialog";
 import type { FlashProxyPlan, PlanUsageData } from "@/lib/plans/types";
 import {
+  normalizePlanProduct,
   formatBytesToGb,
   getPlanCost,
   getPlanProductDisplay,
@@ -56,6 +60,7 @@ type PlanUsageResponse =
     };
 
 export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
+  const router = useRouter();
   const [data, setData] = useState<FlashProxyPlan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,6 +68,9 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
   const [usageData, setUsageData] = useState<PlanUsageData | null>(null);
   const [usageError, setUsageError] = useState<string | null>(null);
   const [isUsageLoading, setIsUsageLoading] = useState(true);
+  const [isExtendDialogOpen, setIsExtendDialogOpen] = useState(false);
+  const [isExtending, setIsExtending] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,7 +116,7 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [planId]);
+  }, [planId, refreshNonce]);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,7 +162,7 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [planId]);
+  }, [planId, refreshNonce]);
 
   const product = useMemo(
     () => getPlanProductDisplay(data?.product),
@@ -171,6 +179,8 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
   const usageBytesRemaining = usageData?.usage?.bytes_remaining;
   const usageMaxBytes =
     usageData?.usage?.max_bytes ?? data?.limits?.max_bytes;
+  const normalizedProduct = normalizePlanProduct(data?.product);
+  const canExtend = normalizedProduct !== "unlimited_residential";
 
   async function handleCopy(key: string, value?: string | number | null) {
     if (!value) {
@@ -182,6 +192,46 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
     window.setTimeout(() => {
       setCopiedKey((current) => (current === key ? null : current));
     }, 1800);
+  }
+
+  async function handleExtendPlan(payload: {
+    add_bandwidth_gb?: number;
+    add_days?: number;
+    extend_30_days?: true;
+  }) {
+    setIsExtending(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/plans/${planId}/extend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify(payload),
+      });
+      const json = (await response.json()) as
+        | { success: true }
+        | { success: false; error?: { message?: string } };
+
+      if (!response.ok || !json.success) {
+        setError(
+          json.success === false
+            ? (json.error?.message ?? "Unable to extend plan")
+            : "Unable to extend plan"
+        );
+        return;
+      }
+
+      setIsExtendDialogOpen(false);
+      setRefreshNonce((current) => current + 1);
+      router.refresh();
+    } catch {
+      setError("Unable to extend plan");
+    } finally {
+      setIsExtending(false);
+    }
   }
 
   return (
@@ -227,13 +277,24 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
                   {data.plan_id}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={data.status === "active" ? "success" : "secondary"}>
-                  {data.status ?? "--"}
-                </Badge>
-                <Badge variant="secondary">
-                  {data.billing_type ?? product.group}
-                </Badge>
+              <div className="flex flex-col items-start gap-3 lg:min-h-[96px] lg:items-end lg:justify-between">
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                  <Badge variant={data.status === "active" ? "success" : "secondary"}>
+                    {data.status ?? "--"}
+                  </Badge>
+                  <Badge variant="secondary">
+                    {data.billing_type ?? product.group}
+                  </Badge>
+                </div>
+                <Button
+                  disabled={!canExtend}
+                  onClick={() => setIsExtendDialogOpen(true)}
+                  size="sm"
+                  type="button"
+                >
+                  <Plus className="size-4" />
+                  Extend plan
+                </Button>
               </div>
             </div>
           </section>
@@ -285,7 +346,7 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
                   }
                   icon={<KeyRound className="size-4 text-primary" />}
                   label="Password"
-                  value={data.proxy_password}
+                  value={maskSecret(data.proxy_password)}
                 />
                 <DetailCard
                   action={
@@ -455,6 +516,16 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
           ) : null}
         </>
       ) : null}
+
+      {data ? (
+        <ExtendPlanDialog
+          isOpen={isExtendDialogOpen}
+          isSubmitting={isExtending}
+          onConfirm={(payload) => void handleExtendPlan(payload)}
+          onOpenChange={setIsExtendDialogOpen}
+          plan={data}
+        />
+      ) : null}
     </div>
   );
 }
@@ -588,4 +659,12 @@ function formatPeriod(start?: string, end?: string) {
   }
 
   return `${formattedStart} - ${formattedEnd}`;
+}
+
+function maskSecret(value?: string | null) {
+  if (!value) {
+    return "--";
+  }
+
+  return "••••••••••••";
 }

@@ -9,10 +9,12 @@ import { flashProxyRequest } from "@/lib/flashproxy/client";
 import { isFlashProxyError } from "@/lib/flashproxy/errors";
 import type {
   ListPlansQuery,
+  PlanExtensionData,
   PlansListData,
   PlanUsageData,
 } from "@/lib/plans/types";
 import type { CreatePlanPayload } from "@/lib/validation/purchase";
+import type { ExtendPlanPayload } from "@/lib/validation/plan-extend";
 
 import type { FlashProxyPlan } from "./types";
 
@@ -332,6 +334,87 @@ export async function getPlanUsage(
           request,
         });
       }
+
+      throw new PlansError(
+        error.status === 0 ? 502 : error.status,
+        error.code,
+        error.message
+      );
+    }
+
+    throw error;
+  }
+}
+
+export async function extendPlan(
+  session: AuthenticatedSession,
+  input: {
+    idempotencyKey: string;
+    payload: ExtendPlanPayload;
+    planId: string;
+    request: Request;
+  }
+): Promise<PlanExtensionData> {
+  const path = `/plans/${input.planId}/extend` as const;
+
+  try {
+    const result = await flashProxyRequest<PlanExtensionData, ExtendPlanPayload>({
+      apiKey: session.apiKey,
+      method: "POST",
+      path,
+      body: input.payload,
+      idempotencyKey: input.idempotencyKey,
+    });
+
+    await writeApiRequestLog({
+      sessionId: session.id,
+      method: "POST",
+      path,
+      statusCode: result.status,
+      durationMs: result.durationMs,
+      success: true,
+    });
+
+    await writeAuditLog({
+      sessionId: session.id,
+      apiKeyHash: session.apiKeyHash,
+      action: AUDIT_ACTIONS.PLAN_EXTENDED,
+      resourceType: AUDIT_RESOURCE_TYPES.PLAN,
+      resourceId: input.planId,
+      metadata: {
+        status: "success",
+        cost_cents: result.data.cost_cents,
+        days_added: result.data.days_added,
+        gb_added: result.data.gb_added,
+      },
+      request: input.request,
+    });
+
+    return result.data;
+  } catch (error) {
+    if (isFlashProxyError(error)) {
+      await writeApiRequestLog({
+        sessionId: session.id,
+        method: "POST",
+        path,
+        statusCode: error.status || null,
+        durationMs: error.durationMs,
+        success: false,
+        errorCode: error.code,
+      });
+
+      await writeAuditLog({
+        sessionId: session.id,
+        apiKeyHash: session.apiKeyHash,
+        action: AUDIT_ACTIONS.PLAN_EXTENDED,
+        resourceType: AUDIT_RESOURCE_TYPES.PLAN,
+        resourceId: input.planId,
+        metadata: {
+          status: "upstream_error",
+          error_code: error.code,
+        },
+        request: input.request,
+      });
 
       throw new PlansError(
         error.status === 0 ? 502 : error.status,

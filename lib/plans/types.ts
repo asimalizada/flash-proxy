@@ -101,3 +101,14 @@ export type PlanUsageData = {
     bytes_used?: number;
   }>;
 };
+
+export type PlanExtensionData = {
+  plan_id?: string;
+  cost_cents?: number;
+  cost_formatted?: string;
+  gb_added?: number;
+  days_added?: number;
+  new_max_gb?: number;
+  new_max_bytes?: number;
+  new_expires_at?: string;
+};
