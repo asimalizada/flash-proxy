@@ -4,16 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   ArrowLeft,
   CircleAlert,
   Copy,
-  Globe,
-  KeyRound,
   Loader2,
   Network,
   Plus,
-  User,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,11 +17,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExtendPlanDialog } from "@/components/plans/extend-plan-dialog";
 import { PlanMetricsPanel } from "@/components/plans/plan-metrics-panel";
+import { ProxyConnectionHelper } from "@/components/plans/proxy-connection-helper";
 import type {
   FlashProxyPlan,
   PlanMetricsData,
   PlanUsageData,
 } from "@/lib/plans/types";
+import type { ProxyConnectionInfoData } from "@/lib/proxies/types";
 import {
   normalizePlanProduct,
   formatBytesToGb,
@@ -77,6 +75,19 @@ type PlanMetricsResponse =
       };
     };
 
+type ProxyConnectionInfoResponse =
+  | {
+      success: true;
+      data: ProxyConnectionInfoData;
+    }
+  | {
+      success: false;
+      error?: {
+        code?: string;
+        message?: string;
+      };
+    };
+
 export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
   const router = useRouter();
   const [data, setData] = useState<FlashProxyPlan | null>(null);
@@ -89,6 +100,8 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
   const [metricsData, setMetricsData] = useState<PlanMetricsData | null>(null);
   const [metricsError, setMetricsError] = useState<string | null>(null);
   const [isMetricsLoading, setIsMetricsLoading] = useState(true);
+  const [connectionInfo, setConnectionInfo] =
+    useState<ProxyConnectionInfoData | null>(null);
   const [isExtendDialogOpen, setIsExtendDialogOpen] = useState(false);
   const [isExtending, setIsExtending] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -138,6 +151,38 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
       cancelled = true;
     };
   }, [planId, refreshNonce]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadConnectionInfo() {
+      try {
+        const response = await fetch("/api/proxies/connection-info", {
+          method: "GET",
+          cache: "no-store",
+        });
+        const json = (await response.json()) as ProxyConnectionInfoResponse;
+
+        if (cancelled) {
+          return;
+        }
+
+        if (response.ok && json.success) {
+          setConnectionInfo(json.data);
+        }
+      } catch {
+        if (!cancelled) {
+          setConnectionInfo(null);
+        }
+      }
+    }
+
+    void loadConnectionInfo();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -373,77 +418,9 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
             <MetricCard label="Expires" value={formatDate(data.expires_at)} />
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
-            <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
-              <CardHeader className="flex flex-row items-center justify-between gap-4">
-                <CardTitle>Connection</CardTitle>
-                <Button
-                  disabled={!data.connection?.format}
-                  onClick={() => void handleCopy("format", data.connection?.format)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <Copy className="size-4" />
-                  {copiedKey === "format" ? "Copied" : "Copy format"}
-                </Button>
-              </CardHeader>
-              <CardContent className="grid gap-4">
-                <DetailCard
-                  action={
-                    <CopyButton
-                      copied={copiedKey === "username"}
-                      onClick={() =>
-                        void handleCopy("username", data.proxy_username)
-                      }
-                    />
-                  }
-                  icon={<User className="size-4 text-primary" />}
-                  label="Username"
-                  value={data.proxy_username}
-                />
-                <DetailCard
-                  action={
-                    <CopyButton
-                      copied={copiedKey === "password"}
-                      onClick={() =>
-                        void handleCopy("password", data.proxy_password)
-                      }
-                    />
-                  }
-                  icon={<KeyRound className="size-4 text-primary" />}
-                  label="Password"
-                  value={maskSecret(data.proxy_password)}
-                />
-                <DetailCard
-                  action={
-                    <CopyButton
-                      copied={copiedKey === "host"}
-                      onClick={() =>
-                        void handleCopy("host", data.connection?.hostname)
-                      }
-                    />
-                  }
-                  icon={<Globe className="size-4 text-primary" />}
-                  label="Hostname"
-                  value={data.connection?.hostname}
-                />
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <DetailCard
-                    icon={<Network className="size-4 text-primary" />}
-                    label="HTTP port"
-                    value={formatNumber(data.connection?.port_http)}
-                  />
-                  <DetailCard
-                    icon={<Network className="size-4 text-primary" />}
-                    label="SOCKS port"
-                    value={formatNumber(data.connection?.port_socks)}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+          <ProxyConnectionHelper connectionInfo={connectionInfo} plan={data} />
 
-            <div className="grid gap-4">
+          <section className="grid gap-4 xl:grid-cols-2">
               <Card className="bg-card/86 shadow-[0_12px_34px_color-mix(in_oklch,var(--foreground)_5%,transparent)]">
                 <CardHeader>
                   <div className="flex items-center justify-between gap-4">
@@ -544,7 +521,6 @@ export function PlanDetailScreen({ planId }: PlanDetailScreenProps) {
                   />
                 </CardContent>
               </Card>
-            </div>
           </section>
 
           <PlanMetricsPanel
@@ -620,48 +596,6 @@ function MetricCard({
   );
 }
 
-function DetailCard({
-  action,
-  icon,
-  label,
-  value,
-}: {
-  action?: React.ReactNode;
-  icon: React.ReactNode;
-  label: string;
-  value?: string;
-}) {
-  return (
-    <div className="rounded-md border bg-background/56 p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="rounded-md border bg-background/70 p-2">{icon}</span>
-          <div>
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <p className="mt-1 break-all font-medium">{value ?? "--"}</p>
-          </div>
-        </div>
-        {action}
-      </div>
-    </div>
-  );
-}
-
-function CopyButton({
-  copied,
-  onClick,
-}: {
-  copied: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <Button onClick={onClick} size="sm" type="button" variant="outline">
-      <Copy className="size-4" />
-      {copied ? "Copied" : "Copy"}
-    </Button>
-  );
-}
-
 function SummaryRow({
   label,
   value,
@@ -732,12 +666,4 @@ function formatPeriod(start?: string, end?: string) {
   }
 
   return `${formattedStart} - ${formattedEnd}`;
-}
-
-function maskSecret(value?: string | null) {
-  if (!value) {
-    return "--";
-  }
-
-  return "••••••••••••";
 }
