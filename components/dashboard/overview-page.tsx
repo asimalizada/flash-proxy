@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -20,7 +23,39 @@ type OverviewPageProps = {
 };
 
 export function OverviewPage({ summary }: OverviewPageProps) {
-  const partialErrorCount = Object.values(summary.partialErrors).filter(Boolean).length;
+  const [currentSummary, setCurrentSummary] = useState(summary);
+  const [isDeferredLoading, setIsDeferredLoading] = useState(true);
+  const partialErrorCount = Object.values(currentSummary.partialErrors).filter(Boolean).length;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDeferredSummary() {
+      try {
+        const response = await fetch("/api/dashboard/summary", {
+          method: "GET",
+          cache: "no-store",
+        });
+        const json = (await response.json()) as
+          | { success: true; data: DashboardSummary }
+          | { success: false };
+
+        if (!cancelled && response.ok && json.success) {
+          setCurrentSummary(json.data);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsDeferredLoading(false);
+        }
+      }
+    }
+
+    void loadDeferredSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -33,7 +68,7 @@ export function OverviewPage({ summary }: OverviewPageProps) {
               Live reseller overview
             </div>
             <h1 className="mt-2 text-2xl font-semibold tracking-normal md:text-3xl">
-              ${summary.balance.balanceFormatted.replace("$", "")} available
+              ${currentSummary.balance.balanceFormatted.replace("$", "")} available
             </h1>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -59,31 +94,35 @@ export function OverviewPage({ summary }: OverviewPageProps) {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard
-          detail={`Spent ${summary.balance.totalSpentFormatted}`}
+          detail={`Spent ${currentSummary.balance.totalSpentFormatted}`}
           icon={CreditCard}
           label="Balance"
-          value={summary.balance.balanceFormatted}
+          value={currentSummary.balance.balanceFormatted}
           tone="primary"
         />
         <SummaryCard
-          detail={`${summary.plans.highUsage} high usage`}
+          detail={`${currentSummary.plans.highUsage} high usage`}
           icon={Package}
           label="Active plans"
-          value={summary.plans.active}
+          value={currentSummary.plans.active}
           tone="blue"
         />
         <SummaryCard
-          detail={summary.usage.period}
+          detail={currentSummary.usage.period}
           icon={Activity}
+          isLoading={isDeferredLoading}
           label="Monthly usage"
-          value={summary.usage.totalBytesFormatted}
+          value={currentSummary.usage.totalBytesFormatted}
           tone="amber"
         />
         <SummaryCard
-          detail={summary.realtime.updatedAt ? "Updated recently" : "No live data"}
+          detail={
+            currentSummary.realtime.updatedAt ? "Updated recently" : "No live data"
+          }
           icon={Activity}
+          isLoading={isDeferredLoading}
           label="Active sessions"
-          value={summary.realtime.totalActiveSessions}
+          value={currentSummary.realtime.totalActiveSessions}
           tone="rose"
         />
       </section>
@@ -94,7 +133,7 @@ export function OverviewPage({ summary }: OverviewPageProps) {
             <div>
               <CardTitle>Usage</CardTitle>
               <p className="mt-2 text-sm text-muted-foreground">
-                {summary.usage.totalBytesFormatted}
+                {currentSummary.usage.totalBytesFormatted}
               </p>
             </div>
             <Button asChild size="sm" variant="outline">
@@ -102,11 +141,17 @@ export function OverviewPage({ summary }: OverviewPageProps) {
             </Button>
           </CardHeader>
           <CardContent>
-            <UsageChart data={summary.usage.dailyBreakdown} />
+            <UsageChart
+              data={currentSummary.usage.dailyBreakdown}
+              isLoading={isDeferredLoading}
+            />
           </CardContent>
         </Card>
 
-        <ProductUsage products={summary.usage.byProduct} />
+        <ProductUsage
+          isLoading={isDeferredLoading}
+          products={currentSummary.usage.byProduct}
+        />
       </section>
     </div>
   );

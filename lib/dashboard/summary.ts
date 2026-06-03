@@ -114,6 +114,8 @@ export type DashboardSummary = {
   };
 };
 
+type DashboardSummaryScope = "critical" | "full";
+
 export class DashboardSummaryError extends Error {
   status: number;
   code: string;
@@ -153,7 +155,7 @@ function isExpiringSoon(plan: PlanItem) {
 }
 
 function summarizePlans(plans?: PlansData) {
-  const items = plans?.items ?? [];
+  const items = plans?.items ?? (plans as PlansData & { plans?: PlanItem[] })?.plans ?? [];
   const active = items.filter((plan) => plan.status === "active");
   const highUsage = active.filter((plan) => {
     const usagePercent = getUsagePercent(plan);
@@ -225,7 +227,8 @@ function getCriticalError(calls: Array<UpstreamCall<unknown>>) {
 
 export async function getDashboardSummary(
   session: AuthenticatedSession,
-  request?: Request
+  request?: Request,
+  scope: DashboardSummaryScope = "full"
 ): Promise<DashboardSummary> {
   const [balanceCall, plansCall, usageCall, realtimeCall] = await Promise.all([
     callFlashProxy<BalanceData>(session, {
@@ -243,17 +246,31 @@ export async function getDashboardSummary(
         order: "desc",
       },
     }),
-    callFlashProxy<UsageSummaryData>(session, {
-      method: "GET",
-      path: "/usage/summary",
-      query: {
-        period: "month",
-      },
-    }),
-    callFlashProxy<RealtimeUsageData>(session, {
-      method: "GET",
-      path: "/usage/realtime",
-    }),
+    scope === "full"
+      ? callFlashProxy<UsageSummaryData>(session, {
+          method: "GET",
+          path: "/usage/summary",
+          query: {
+            period: "month",
+          },
+        })
+      : Promise.resolve({
+          method: "GET" as const,
+          path: "/usage/summary" as const,
+          data: undefined,
+          error: undefined,
+        }),
+    scope === "full"
+      ? callFlashProxy<RealtimeUsageData>(session, {
+          method: "GET",
+          path: "/usage/realtime",
+        })
+      : Promise.resolve({
+          method: "GET" as const,
+          path: "/usage/realtime" as const,
+          data: undefined,
+          error: undefined,
+        }),
   ]);
 
   const criticalError = getCriticalError([

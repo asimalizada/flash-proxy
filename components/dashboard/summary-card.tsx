@@ -8,6 +8,7 @@ type SummaryCardProps = {
   value: string | number;
   detail?: string;
   icon: LucideIcon;
+  isLoading?: boolean;
   tone?: "primary" | "amber" | "blue" | "rose";
 };
 
@@ -16,6 +17,7 @@ export function SummaryCard({
   value,
   detail,
   icon: Icon,
+  isLoading = false,
   tone = "primary",
 }: SummaryCardProps) {
   const toneClass = {
@@ -37,10 +39,17 @@ export function SummaryCard({
         </span>
       </CardHeader>
       <CardContent>
-        <p className="text-3xl font-semibold tracking-normal lg:text-[2rem]">
-          {value}
-        </p>
-        {detail ? (
+        {isLoading ? (
+          <div className="space-y-3">
+            <div className="h-8 w-24 rounded-md bg-primary/10" />
+            <div className="h-4 w-20 rounded-md bg-muted" />
+          </div>
+        ) : (
+          <p className="text-3xl font-semibold tracking-normal lg:text-[2rem]">
+            {value}
+          </p>
+        )}
+        {detail && !isLoading ? (
           <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
         ) : null}
       </CardContent>

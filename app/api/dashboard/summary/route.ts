@@ -8,9 +8,13 @@ import {
 
 export async function GET(request: Request) {
   const session = await requireSession();
+  const scope =
+    new URL(request.url).searchParams.get("scope") === "critical"
+      ? "critical"
+      : "full";
 
   try {
-    const summary = await getDashboardSummary(session, request);
+    const summary = await getDashboardSummary(session, request, scope);
 
     return NextResponse.json({
       success: true,

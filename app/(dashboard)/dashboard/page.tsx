@@ -15,7 +15,7 @@ async function loadSummary() {
   }
 
   try {
-    return await getDashboardSummary(session);
+    return await getDashboardSummary(session, undefined, "critical");
   } catch (error) {
     if (error instanceof DashboardSummaryError && error.status === 401) {
       redirect("/login");

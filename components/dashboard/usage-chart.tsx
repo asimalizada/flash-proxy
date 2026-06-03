@@ -15,6 +15,7 @@ type UsageChartProps = {
     date?: string;
     bytes_used?: number;
   }>;
+  isLoading?: boolean;
 };
 
 function bytesToGb(bytes = 0) {
@@ -38,7 +39,24 @@ function formatDate(value?: string) {
   });
 }
 
-export function UsageChart({ data }: UsageChartProps) {
+export function UsageChart({ data, isLoading = false }: UsageChartProps) {
+  if (isLoading) {
+    return (
+      <div className="relative h-72 overflow-hidden rounded-md border bg-background/56 p-6">
+        <div className="absolute inset-6 rounded-md bg-[linear-gradient(to_right,color-mix(in_oklch,var(--border)_46%,transparent)_1px,transparent_1px),linear-gradient(to_bottom,color-mix(in_oklch,var(--border)_46%,transparent)_1px,transparent_1px)] bg-[size:46px_46px] opacity-55" />
+        <div className="relative flex h-full items-end gap-2 opacity-65">
+          {[26, 48, 34, 58, 46, 64, 38, 52, 74, 44, 62, 50].map((height, index) => (
+            <div
+              className="min-w-0 flex-1 rounded-sm bg-gradient-to-t from-primary/20 to-primary/5"
+              key={index}
+              style={{ height: `${height}%` }}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const chartData = data.map((item) => ({
     date: formatDate(item.date),
     gb: bytesToGb(item.bytes_used),
