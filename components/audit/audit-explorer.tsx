@@ -1,12 +1,28 @@
 import Link from "next/link";
 import type { AuditLog, Prisma } from "@prisma/client";
 import { Filter, History, KeyRound, Search } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { auditActionOptions, auditResourceTypeOptions } from "@/lib/audit/query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -29,6 +45,11 @@ type AuditExplorerProps = {
     resourceType?: string;
   };
   items: AuditLog[];
+  pagination: {
+    page: number;
+    perPage: number;
+    totalPages: number;
+  };
   recentCount: number;
   resourceCounts: Array<{
     resourceType: string | null;
@@ -43,10 +64,14 @@ export function AuditExplorer({
   actionCounts,
   filters,
   items,
+  pagination,
   recentCount,
   resourceCounts,
   total,
 }: AuditExplorerProps) {
+  const firstItem = total === 0 ? 0 : (pagination.page - 1) * pagination.perPage + 1;
+  const lastItem = Math.min(pagination.page * pagination.perPage, total);
+
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
       <section className="grid gap-4 md:grid-cols-3">
@@ -79,7 +104,9 @@ export function AuditExplorer({
                   <Link href="/audit">Clear filters</Link>
                 </Button>
               ) : null}
-              <Badge variant="secondary">{items.length} shown</Badge>
+              <Badge variant="secondary">
+                {firstItem}-{lastItem} of {total}
+              </Badge>
             </div>
           </div>
 
@@ -93,30 +120,32 @@ export function AuditExplorer({
                 placeholder="Search resource ID or key hash"
               />
             </div>
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              defaultValue={filters.action ?? ""}
-              name="action"
-            >
-              <option value="">All actions</option>
+            <Select defaultValue={filters.action ?? "all"} name="action">
+              <SelectTrigger>
+                <SelectValue placeholder="All actions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All actions</SelectItem>
               {auditActionOptions.map((option) => (
-                <option key={option} value={option}>
+                <SelectItem key={option} value={option}>
                   {formatEnum(option)}
-                </option>
+                </SelectItem>
               ))}
-            </select>
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              defaultValue={filters.resourceType ?? ""}
-              name="resourceType"
-            >
-              <option value="">All resources</option>
+              </SelectContent>
+            </Select>
+            <Select defaultValue={filters.resourceType ?? "all"} name="resourceType">
+              <SelectTrigger>
+                <SelectValue placeholder="All resources" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All resources</SelectItem>
               {auditResourceTypeOptions.map((option) => (
-                <option key={option} value={option}>
+                <SelectItem key={option} value={option}>
                   {formatEnum(option)}
-                </option>
+                </SelectItem>
               ))}
-            </select>
+              </SelectContent>
+            </Select>
             <Button type="submit">Apply</Button>
           </form>
 
@@ -139,58 +168,75 @@ export function AuditExplorer({
         </CardHeader>
 
         <CardContent>
-          {items.length === 0 ? (
-            <div className="rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-              No audit events match these filters
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Time</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Resource</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Summary</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => {
-                  const metadata = asRecord(item.metadata);
-                  const status = getStatus(metadata);
+          <div className="space-y-4">
+            {items.length === 0 ? (
+              <div className="rounded-md border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
+                No audit events match these filters
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Resource</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Request</TableHead>
+                    <TableHead>Summary</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((item) => {
+                    const metadata = asRecord(item.metadata);
+                    const status = getStatus(metadata);
 
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {formatDateTime(item.createdAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{formatEnum(item.action)}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="text-sm font-medium">
-                            {formatEnum(item.resourceType ?? "unknown")}
+                    return (
+                      <TableRow key={item.id}>
+                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                          {formatDateTime(item.createdAt)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{formatEnum(item.action)}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <div className="text-sm font-medium">
+                              {formatEnum(item.resourceType ?? "unknown")}
+                            </div>
+                            <div className="font-mono text-xs text-muted-foreground">
+                              {item.resourceId ?? truncate(item.apiKeyHash) ?? "--"}
+                            </div>
                           </div>
-                          <div className="font-mono text-xs text-muted-foreground">
-                            {item.resourceId ?? truncate(item.apiKeyHash) ?? "--"}
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={status === "success" ? "success" : "secondary"}>
-                          {status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[340px] text-sm text-muted-foreground">
-                        {buildSummary(metadata)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={status === "success" ? "success" : "secondary"}
+                          >
+                            {status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[220px] text-xs text-muted-foreground">
+                          <div>{item.ipAddress ?? "--"}</div>
+                          <div className="truncate">{item.userAgent ?? "--"}</div>
+                        </TableCell>
+                        <TableCell className="max-w-[300px] text-sm text-muted-foreground">
+                          {buildSummary(metadata)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+
+            {pagination.totalPages > 1 ? (
+              <AuditPagination
+                filters={filters}
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+              />
+            ) : null}
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -202,7 +248,7 @@ function MetricCard({
   label,
   value,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
 }) {
@@ -239,6 +285,111 @@ function CountPanel({
       </div>
     </div>
   );
+}
+
+function AuditPagination({
+  filters,
+  page,
+  totalPages,
+}: {
+  filters: AuditExplorerProps["filters"];
+  page: number;
+  totalPages: number;
+}) {
+  const pages = getVisiblePages(page, totalPages);
+  const hasPrevious = page > 1;
+  const hasNext = page < totalPages;
+
+  return (
+    <Pagination>
+      <PaginationContent>
+        <PaginationItem>
+          {hasPrevious ? (
+            <PaginationPrevious href={buildPageHref(filters, page - 1)} />
+          ) : (
+            <Button disabled size="default" type="button" variant="ghost">
+              Previous
+            </Button>
+          )}
+        </PaginationItem>
+        {pages.map((item, index) => (
+          <PaginationItem key={`${item}-${index}`}>
+            {item === "ellipsis" ? (
+              <span className="flex size-9 items-center justify-center text-sm text-muted-foreground">
+                ...
+              </span>
+            ) : (
+              <PaginationLink
+                href={buildPageHref(filters, item)}
+                isActive={item === page}
+              >
+                {item}
+              </PaginationLink>
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem>
+          {hasNext ? (
+            <PaginationNext href={buildPageHref(filters, page + 1)} />
+          ) : (
+            <Button disabled size="default" type="button" variant="ghost">
+              Next
+            </Button>
+          )}
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  );
+}
+
+function buildPageHref(filters: AuditExplorerProps["filters"], page: number) {
+  const params = new URLSearchParams();
+
+  if (filters.q) {
+    params.set("q", filters.q);
+  }
+
+  if (filters.action) {
+    params.set("action", filters.action);
+  }
+
+  if (filters.resourceType) {
+    params.set("resourceType", filters.resourceType);
+  }
+
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+
+  const query = params.toString();
+
+  return query ? `/audit?${query}` : "/audit";
+}
+
+function getVisiblePages(page: number, totalPages: number) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages: Array<number | "ellipsis"> = [1];
+  const start = Math.max(page - 1, 2);
+  const end = Math.min(page + 1, totalPages - 1);
+
+  if (start > 2) {
+    pages.push("ellipsis");
+  }
+
+  for (let current = start; current <= end; current += 1) {
+    pages.push(current);
+  }
+
+  if (end < totalPages - 1) {
+    pages.push("ellipsis");
+  }
+
+  pages.push(totalPages);
+
+  return pages;
 }
 
 function formatEnum(value: string) {

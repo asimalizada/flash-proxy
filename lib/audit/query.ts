@@ -8,12 +8,15 @@ type AuditFilters = {
 };
 
 export type AuditListFilters = AuditFilters & {
-  limit?: number;
+  page?: number;
+  perPage?: number;
 };
 
 export async function getAuditOverview(filters: AuditListFilters = {}) {
   const where = buildAuditWhere(filters);
-  const limit = Math.min(filters.limit ?? 50, 100);
+  const page = Math.max(filters.page ?? 1, 1);
+  const perPage = Math.min(Math.max(filters.perPage ?? 20, 1), 100);
+  const skip = (page - 1) * perPage;
 
   const [items, total, recentCount, actionCounts, resourceCounts] =
     await Promise.all([
@@ -22,7 +25,8 @@ export async function getAuditOverview(filters: AuditListFilters = {}) {
         orderBy: {
           createdAt: "desc",
         },
-        take: limit,
+        skip,
+        take: perPage,
       }),
       prisma.auditLog.count({ where }),
       prisma.auditLog.count({
@@ -67,6 +71,11 @@ export async function getAuditOverview(filters: AuditListFilters = {}) {
     recentCount,
     actionCounts,
     resourceCounts,
+    pagination: {
+      page,
+      perPage,
+      totalPages: Math.max(Math.ceil(total / perPage), 1),
+    },
   };
 }
 
